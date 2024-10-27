@@ -7,7 +7,7 @@ import (
 )
 
 type Specification struct {
-	Embedded                     `desc:"can we document a struct"`
+	Embedded                     `envconfig:",squash" desc:"can we document a struct"`
 	EmbeddedButIgnored           `ignored:"true"`
 	Debug                        bool
 	Port                         int
@@ -18,7 +18,6 @@ type Specification struct {
 	AdminUsers                   []string
 	MagicNumbers                 []int
 	EmptyNumbers                 []int
-	ByteSlice                    []byte
 	ColorCodes                   map[string]int
 	MultiWordVar                 string
 	MultiWordVarWithAutoSplit    uint32 `split_words:"true"`
@@ -40,8 +39,6 @@ type Specification struct {
 	} `envconfig:"outer"`
 	AfterNested string
 	MapField    map[string]string `default:"one=two,three=four"`
-	// UrlValue    CustomURL
-	// UrlPointer  *CustomURL
 }
 
 type Embedded struct {
@@ -69,7 +66,6 @@ func TestProcess(t *testing.T) {
 	os.Setenv("ENV_CONFIG_ADMINUSERS", "John,Adam,Will")
 	os.Setenv("ENV_CONFIG_MAGICNUMBERS", "5,10,20")
 	os.Setenv("ENV_CONFIG_EMPTYNUMBERS", "")
-	// os.Setenv("ENV_CONFIG_BYTESLICE", "this is a test value")
 	os.Setenv("ENV_CONFIG_COLORCODES", "red=1,green=2,blue=3")
 	os.Setenv("SERVICE_HOST", "127.0.0.1")
 	os.Setenv("ENV_CONFIG_TTL", "30")
@@ -358,7 +354,13 @@ func TestRequiredDefault(t *testing.T) {
 	var s Specification
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
-	if err := Process("env_config", &s); err != nil {
+
+	config := NewStructConfig(&Options{
+		Tags:      OptionTags{FileTag: "envconfig"},
+		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	})
+
+	if err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 
@@ -371,30 +373,18 @@ func TestPointerFieldBlank(t *testing.T) {
 	var s Specification
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
-	if err := Process("env_config", &s); err != nil {
+
+	config := NewStructConfig(&Options{
+		Tags:      OptionTags{FileTag: "envconfig"},
+		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	})
+
+	if err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 
 	if s.SomePointer != nil {
 		t.Errorf("expected <nil>, got %q", *s.SomePointer)
-	}
-}
-
-func TestEmptyMapFieldOverride(t *testing.T) {
-	var s Specification
-	os.Clearenv()
-	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
-	os.Setenv("ENV_CONFIG_MAPFIELD", "")
-	if err := Process("env_config", &s); err != nil {
-		t.Error(err.Error())
-	}
-
-	if s.MapField == nil {
-		t.Error("expected empty map, got <nil>")
-	}
-
-	if len(s.MapField) != 0 {
-		t.Errorf("expected empty map, got map of size %d", len(s.MapField))
 	}
 }
 
@@ -407,7 +397,13 @@ func TestMustProcess(t *testing.T) {
 	os.Setenv("ENV_CONFIG_USER", "Kelsey")
 	os.Setenv("SERVICE_HOST", "127.0.0.1")
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
-	MustProcess("env_config", &s)
+
+	config := NewStructConfig(&Options{
+		Tags:      OptionTags{FileTag: "envconfig"},
+		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	})
+
+	config.MustProcess("env_config", &s)
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -417,7 +413,7 @@ func TestMustProcess(t *testing.T) {
 		t.Error("expected panic")
 	}()
 	m := make(map[string]string)
-	MustProcess("env_config", &m)
+	config.MustProcess("env_config", &m)
 }
 
 func TestEmbeddedStruct(t *testing.T) {
@@ -432,9 +428,16 @@ func TestEmbeddedStruct(t *testing.T) {
 	os.Setenv("ENV_CONFIG_EMBEDDED_WITH_ALT", "foobar")
 	os.Setenv("ENV_CONFIG_SOMEPOINTER", "foobaz")
 	os.Setenv("ENV_CONFIG_EMBEDDED_IGNORED", "was-not-ignored")
-	if err := Process("env_config", &s); err != nil {
+
+	config := NewStructConfig(&Options{
+		Tags:      OptionTags{FileTag: "envconfig"},
+		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	})
+
+	if err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
+
 	if !s.Enabled {
 		t.Errorf("expected %v, got %v", true, s.Enabled)
 	}

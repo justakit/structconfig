@@ -44,18 +44,6 @@ const (
 	flagDebug         = "debug"
 )
 
-// Decoder has the same semantics as Setter, but takes higher precedence.
-// It is provided for historical compatibility.
-type Decoder interface {
-	Decode(value string) error
-}
-
-// Setter is implemented by types can self-deserialize values.
-// Any type that implements flag.Value also implements Setter.
-type Setter interface {
-	Set(value string) error
-}
-
 // varInfo maintains information about the configuration variable.
 type varInfo struct {
 	Default     any
@@ -120,7 +108,7 @@ func (o *Options) fillDefaults() *Options {
 	return o
 }
 
-// gatherInfo gathers information about the specified struct
+// gatherInfo gathers information about the specified struct.
 func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo, error) {
 	specValue := reflect.ValueOf(spec)
 
@@ -451,6 +439,13 @@ func MustProcess(prefix string, spec interface{}) {
 	}
 }
 
+// MustProcess is the same as Process but panics if an error occurs.
+func (s *StructConfig) MustProcess(prefix string, spec interface{}) {
+	if err := s.Process(prefix, spec); err != nil {
+		panic(err)
+	}
+}
+
 func (s *StructConfig) addBuiltInFlags() {
 	s.flags.StringP(flagConfigPath, "c", "", "explicit path to application config")
 	s.flags.StringP(flagConfigType, "t", s.options.ConfigType, "config type type")
@@ -491,7 +486,11 @@ func (s *StructConfig) processDefaultConfigFlag(target any) error {
 			}
 		}
 
-		err = v.Unmarshal(target, func(c *mapstructure.DecoderConfig) {
+		err = v.Unmarshal(target, viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+			mapstructure.StringToSliceHookFunc(","),
+			StringToMapStringHookFunc("=", ","),
+		)), func(c *mapstructure.DecoderConfig) {
 			c.TagName = s.options.Tags.FileTag
 		})
 		if err != nil {
