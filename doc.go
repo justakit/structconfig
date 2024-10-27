@@ -1,1 +1,1 @@
-package envconfig
+package structconfig
