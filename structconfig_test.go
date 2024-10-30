@@ -1,9 +1,11 @@
-package structconfig
+package structconfig_test
 
 import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/justakit/structconfig"
 )
 
 type Specification struct {
@@ -80,9 +82,9 @@ func TestProcess(t *testing.T) {
 	os.Setenv("ENV_CONFIG_URLVALUE", "https://github.com/justakit/structconfig")
 	os.Setenv("ENV_CONFIG_URLPOINTER", "https://github.com/justakit/structconfig")
 
-	config := NewStructConfig(&Options{
-		Tags:      OptionTags{FileTag: "envconfig"},
-		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	config := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
 	err := config.Process("env_config", &s)
@@ -174,7 +176,7 @@ func TestParseErrorBool(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_DEBUG", "string")
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
-	err := Process("env_config", &s)
+	err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Errorf("expected err")
 	}
@@ -185,7 +187,7 @@ func TestParseErrorFloat32(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_RATE", "string")
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
-	err := Process("env_config", &s)
+	err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Errorf("expected err")
 	}
@@ -196,7 +198,7 @@ func TestParseErrorInt(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_PORT", "string")
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
-	err := Process("env_config", &s)
+	err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Errorf("expected err")
 	}
@@ -206,7 +208,7 @@ func TestParseErrorUint(t *testing.T) {
 	var s Specification
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_TTL", "-30")
-	err := Process("env_config", &s)
+	err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Errorf("expected err")
 	}
@@ -216,7 +218,7 @@ func TestParseErrorSplitWords(t *testing.T) {
 	var s Specification
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_MULTI_WORD_VAR_WITH_AUTO_SPLIT", "shakespeare")
-	err := Process("env_config", &s)
+	err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Errorf("expected err")
 	}
@@ -228,9 +230,9 @@ func TestUnsetVars(t *testing.T) {
 	os.Setenv("USER", "foo")
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
 
-	config := NewStructConfig(&Options{
-		Tags:      OptionTags{FileTag: "envconfig"},
-		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	config := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
 	if err := config.Process("env_config", &s); err != nil {
@@ -252,9 +254,9 @@ func TestAlternateVarNames(t *testing.T) {
 	os.Setenv("ENV_CONFIG_MULTI_WORD_VAR_WITH_LOWER_CASE_ALT", "baz")
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
 
-	config := NewStructConfig(&Options{
-		Tags:      OptionTags{FileTag: "envconfig"},
-		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	config := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
 	if err := config.Process("env_config", &s); err != nil {
@@ -284,9 +286,9 @@ func TestRequiredVar(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foobar")
 
-	config := NewStructConfig(&Options{
-		Tags:      OptionTags{FileTag: "envconfig"},
-		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	config := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
 	if err := config.Process("env_config", &s); err != nil {
@@ -302,7 +304,7 @@ func TestRequiredMissing(t *testing.T) {
 	var s Specification
 	os.Clearenv()
 
-	err := Process("env_config", &s)
+	err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Error("no failure when missing required variable")
 	}
@@ -313,9 +315,9 @@ func TestBlankDefaultVar(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "requiredvalue")
 
-	config := NewStructConfig(&Options{
-		Tags:      OptionTags{FileTag: "envconfig"},
-		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	config := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
 	if err := config.Process("env_config", &s); err != nil {
@@ -336,9 +338,9 @@ func TestNonBlankDefaultVar(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_DEFAULTVAR", "nondefaultval")
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "requiredvalue")
-	config := NewStructConfig(&Options{
-		Tags:      OptionTags{FileTag: "envconfig"},
-		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	config := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
 	if err := config.Process("env_config", &s); err != nil {
@@ -355,9 +357,9 @@ func TestRequiredDefault(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
 
-	config := NewStructConfig(&Options{
-		Tags:      OptionTags{FileTag: "envconfig"},
-		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	config := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
 	if err := config.Process("env_config", &s); err != nil {
@@ -374,9 +376,9 @@ func TestPointerFieldBlank(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
 
-	config := NewStructConfig(&Options{
-		Tags:      OptionTags{FileTag: "envconfig"},
-		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	config := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
 	if err := config.Process("env_config", &s); err != nil {
@@ -398,9 +400,9 @@ func TestMustProcess(t *testing.T) {
 	os.Setenv("SERVICE_HOST", "127.0.0.1")
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
 
-	config := NewStructConfig(&Options{
-		Tags:      OptionTags{FileTag: "envconfig"},
-		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	config := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
 	config.MustProcess("env_config", &s)
@@ -429,9 +431,9 @@ func TestEmbeddedStruct(t *testing.T) {
 	os.Setenv("ENV_CONFIG_SOMEPOINTER", "foobaz")
 	os.Setenv("ENV_CONFIG_EMBEDDED_IGNORED", "was-not-ignored")
 
-	config := NewStructConfig(&Options{
-		Tags:      OptionTags{FileTag: "envconfig"},
-		FlagNames: OptionFlagNames{Debug: "config-debug"},
+	config := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
 	if err := config.Process("env_config", &s); err != nil {
@@ -473,7 +475,7 @@ func TestEmbeddedButIgnoredStruct(t *testing.T) {
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "required")
 	os.Setenv("ENV_CONFIG_FIRSTEMBEDDEDBUTIGNORED", "was-not-ignored")
 	os.Setenv("ENV_CONFIG_SECONDEMBEDDEDBUTIGNORED", "was-not-ignored")
-	if err := Process("env_config", &s); err != nil {
+	if err := structconfig.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 	if s.FirstEmbeddedButIgnored != "" {
@@ -489,8 +491,8 @@ func TestNonPointerFailsProperly(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "snap")
 
-	err := Process("env_config", s)
-	if err != ErrInvalidSpecification {
+	err := structconfig.Process("env_config", s)
+	if err != structconfig.ErrInvalidSpecification {
 		t.Errorf("non-pointer should fail with ErrInvalidSpecification, was instead %s", err)
 	}
 }
@@ -500,7 +502,7 @@ func TestEmptyPrefixUsesFieldNames(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("REQUIREDVAR", "foo")
 
-	err := Process("", &s)
+	err := structconfig.Process("", &s)
 	if err != nil {
 		t.Errorf("Process failed: %s", err)
 	}
@@ -519,38 +521,10 @@ func TestNestedStructVarName(t *testing.T) {
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "required")
 	val := "found with only short name"
 	os.Setenv("INNER", val)
-	if err := Process("env_config", &s); err != nil {
+	if err := structconfig.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 	if s.NestedSpecification.Property != val {
 		t.Errorf("expected %s, got %s", val, s.NestedSpecification.Property)
-	}
-}
-
-func BenchmarkGatherInfo(b *testing.B) {
-	os.Clearenv()
-	os.Setenv("ENV_CONFIG_DEBUG", "true")
-	os.Setenv("ENV_CONFIG_PORT", "8080")
-	os.Setenv("ENV_CONFIG_RATE", "0.5")
-	os.Setenv("ENV_CONFIG_USER", "Kelsey")
-	os.Setenv("ENV_CONFIG_TIMEOUT", "2m")
-	os.Setenv("ENV_CONFIG_ADMINUSERS", "John,Adam,Will")
-	os.Setenv("ENV_CONFIG_MAGICNUMBERS", "5,10,20")
-	os.Setenv("ENV_CONFIG_COLORCODES", "red:1,green:2,blue:3")
-	os.Setenv("SERVICE_HOST", "127.0.0.1")
-	os.Setenv("ENV_CONFIG_TTL", "30")
-	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
-	os.Setenv("ENV_CONFIG_IGNORED", "was-not-ignored")
-	os.Setenv("ENV_CONFIG_OUTER_INNER", "iamnested")
-	os.Setenv("ENV_CONFIG_AFTERNESTED", "after")
-	os.Setenv("ENV_CONFIG_HONOR", "honor")
-	os.Setenv("ENV_CONFIG_DATETIME", "2016-08-16T18:57:05Z")
-	os.Setenv("ENV_CONFIG_MULTI_WORD_VAR_WITH_AUTO_SPLIT", "24")
-
-	c := NewStructConfig(nil)
-
-	for i := 0; i < b.N; i++ {
-		var s Specification
-		c.gatherInfo("", "env_config", &s)
 	}
 }
