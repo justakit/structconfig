@@ -475,7 +475,13 @@ func TestEmbeddedButIgnoredStruct(t *testing.T) {
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "required")
 	os.Setenv("ENV_CONFIG_FIRSTEMBEDDEDBUTIGNORED", "was-not-ignored")
 	os.Setenv("ENV_CONFIG_SECONDEMBEDDEDBUTIGNORED", "was-not-ignored")
-	if err := structconfig.Process("env_config", &s); err != nil {
+
+	config := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
+	})
+
+	if err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 	if s.FirstEmbeddedButIgnored != "" {

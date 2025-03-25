@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -48,6 +48,7 @@ const (
 type varInfo struct {
 	Default     any
 	typ         reflect.Type
+	field       reflect.Value
 	Name        string
 	Key         string
 	Env         string
@@ -160,6 +161,7 @@ func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo
 			Description: ftype.Tag.Get(tagDescription),
 			Required:    required,
 			typ:         ftype.Type,
+			field:       f,
 		}
 
 		// If file tag present, it will be used as default for key and env variable
@@ -409,6 +411,7 @@ func (s *StructConfig) addFlag(v *varInfo) error {
 		return fmt.Errorf("unsupported type %s for flag %s(%s)", v.typ, v.Name, v.Flag)
 	}
 
+	// s.flags.Lookup("sdfsd").Value.String()
 	err := s.viper.BindPFlag(v.Key, s.flags.Lookup(v.Flag))
 	return err
 }
