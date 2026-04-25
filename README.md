@@ -1,233 +1,222 @@
 # structconfig
 
-```Go
+```go
 import "github.com/justakit/structconfig"
 ```
 
-Populates configuration structure with config values from environment, flags, file and defaults
+`structconfig` populates a struct from four configuration sources in a fixed order:
 
-Based on github.com/kelseyhightower/envconfig package
+1. Struct tag defaults
+2. Config file values
+3. Environment variables
+4. CLI flags
+
+Higher-priority sources override lower-priority ones.
+
+The package started from the `envconfig` model, but the current library is broader: it can merge defaults, TOML or YAML config files, environment variables, and command-line flags into one config struct.
 
 ## Documentation
 
-See [godoc](http://godoc.org/github.com/justakit/structconfig)
+See [pkg.go.dev](https://pkg.go.dev/github.com/justakit/structconfig).
 
-## Usage
+## Quick Start
 
-Set some environment variables:
+Given this config file:
 
-```Bash
-export MYAPP_DEBUG=false
-export MYAPP_PORT=8080
-export MYAPP_USER=Kelsey
-export MYAPP_RATE="0.5"
-export MYAPP_TIMEOUT="3m"
-export MYAPP_USERS="rob,ken,robert"
-export MYAPP_COLORCODES="red:1,green:2,blue:3"
+```toml
+debug = true
+port = 8080
+user = "file-user"
+timeout = "45s"
+adminusers = ["alice", "bob"]
+colorcodes = { red = 1, blue = 2 }
+
+[database]
+host = "db.internal"
 ```
 
-Write some code:
+and these environment variables:
 
-```Go
+```bash
+export MYAPP_USER=env-user
+export MYAPP_COLORCODES=red=10,green=20
+```
+
+you can load configuration like this:
+
+```go
 package main
 
 import (
-    "fmt"
-    "log"
-    "time"
+	"fmt"
+	"log"
+	"time"
 
-    "github.com/justakit/structconfig"
+	"github.com/justakit/structconfig"
 )
 
-type Specification struct {
-    Debug       bool `default:"true" env:"debug"`
-    Port        int
-    User        string
-    Users       []string
-    Rate        float32
-    Timeout     time.Duration
-    ColorCodes  map[string]int `flag:"color-code"
+type Config struct {
+	Debug      bool           `default:"false"`
+	Port       int            `default:"3000"`
+	User       string         `required:"true"`
+	Timeout    time.Duration  `default:"30s"`
+	AdminUsers []string
+	ColorCodes map[string]int `default:"red=1,blue=2"`
+	Database   struct {
+		Host string `default:"localhost"`
+	}
 }
 
 func main() {
-    var s Specification
-    err := structconfig.Process("myapp", &s)
-    if err != nil {
-        log.Fatal(err.Error())
-    }
-    format := "Debug: %v\nPort: %d\nUser: %s\nRate: %f\nTimeout: %s\n"
-    _, err = fmt.Printf(format, s.Debug, s.Port, s.User, s.Rate, s.Timeout)
-    if err != nil {
-        log.Fatal(err.Error())
-    }
+	var cfg Config
 
-    fmt.Println("Users:")
-    for _, u := range s.Users {
-        fmt.Printf("  %s\n", u)
-    }
-
-    fmt.Println("Color codes:")
-    for k, v := range s.ColorCodes {
-        fmt.Printf("  %s: %d\n", k, v)
-    }
-}
-```
-
-Results:
-
-```Bash
-Debug: false
-Port: 8080
-User: Kelsey
-Rate: 0.500000
-Timeout: 3m0s
-Users:
-  rob
-  ken
-  robert
-Color codes:
-  red: 1
-  green: 2
-  blue: 3
-```
-
-## Struct Tag Support
-
-Envconfig supports the use of struct tags to specify alternate, default, and required
-environment variables.
-
-For example, consider the following struct:
-
-```Go
-type Specification struct {
-    ManualOverride1 string `envconfig:"manual_override_1"`
-    DefaultVar      string `default:"foobar"`
-    RequiredVar     string `required:"true"`
-    IgnoredVar      string `ignored:"true"`
-    AutoSplitVar    string `split_words:"true"`
-    RequiredAndAutoSplitVar    string `required:"true" split_words:"true"`
-}
-```
-
-Envconfig has automatic support for CamelCased struct elements when the
-`split_words:"true"` tag is supplied. Without this tag, `AutoSplitVar` above
-would look for an environment variable called `MYAPP_AUTOSPLITVAR`. With the
-setting applied it will look for `MYAPP_AUTO_SPLIT_VAR`. Note that numbers
-will get globbed into the previous word. If the setting does not do the
-right thing, you may use a manual override.
-
-Envconfig will process value for `ManualOverride1` by populating it with the
-value for `MYAPP_MANUAL_OVERRIDE_1`. Without this struct tag, it would have
-instead looked up `MYAPP_MANUALOVERRIDE1`. With the `split_words:"true"` tag
-it would have looked up `MYAPP_MANUAL_OVERRIDE1`.
-
-```Bash
-export MYAPP_MANUAL_OVERRIDE_1="this will be the value"
-
-# export MYAPP_MANUALOVERRIDE1="and this will not"
-```
-
-If envconfig can't find an environment variable value for `MYAPP_DEFAULTVAR`,
-it will populate it with "foobar" as a default value.
-
-If envconfig can't find an environment variable value for `MYAPP_REQUIREDVAR`,
-it will return an error when asked to process the struct.  If
-`MYAPP_REQUIREDVAR` is present but empty, envconfig will not return an error.
-
-If envconfig can't find an environment variable in the form `PREFIX_MYVAR`, and there
-is a struct tag defined, it will try to populate your variable with an environment
-variable that directly matches the envconfig tag in your struct definition:
-
-```shell
-export SERVICE_HOST=127.0.0.1
-export MYAPP_DEBUG=true
-```
-```Go
-type Specification struct {
-    ServiceHost string `envconfig:"SERVICE_HOST"`
-    Debug       bool
-}
-```
-
-Envconfig won't process a field with the "ignored" tag set to "true", even if a corresponding
-environment variable is set.
-
-## Supported Struct Field Types
-
-envconfig supports these struct field types:
-
-  * string
-  * int8, int16, int32, int64
-  * bool
-  * float32, float64
-  * slices of any supported type
-  * maps (keys and values of any supported type)
-  * [encoding.TextUnmarshaler](https://golang.org/pkg/encoding/#TextUnmarshaler)
-  * [encoding.BinaryUnmarshaler](https://golang.org/pkg/encoding/#BinaryUnmarshaler)
-  * [time.Duration](https://golang.org/pkg/time/#Duration)
-
-Embedded structs using these fields are also supported.
-
-## Custom Decoders
-
-Any field whose type (or pointer-to-type) implements `envconfig.Decoder` can
-control its own deserialization:
-
-```Bash
-export DNS_SERVER=8.8.8.8
-```
-
-```Go
-type IPDecoder net.IP
-
-func (ipd *IPDecoder) Decode(value string) error {
-    *ipd = IPDecoder(net.ParseIP(value))
-    return nil
-}
-
-type DNSConfig struct {
-    Address IPDecoder `envconfig:"DNS_SERVER"`
-}
-```
-
-Example for decoding the environment variables into map[string][]structName type
-
-```Bash
-export SMS_PROVIDER_WITH_WEIGHT= `IND=[{"name":"SMSProvider1","weight":70},{"name":"SMSProvider2","weight":30}];US=[{"name":"SMSProvider1","weight":100}]`
-```
-
-```GO
-type providerDetails struct {
-	Name   string
-	Weight int
-}
-
-type SMSProviderDecoder map[string][]providerDetails
-
-func (sd *SMSProviderDecoder) Decode(value string) error {
-	smsProvider := map[string][]providerDetails{}
-	pairs := strings.Split(value, ";")
-	for _, pair := range pairs {
-		providerdata := []providerDetails{}
-		kvpair := strings.Split(pair, "=")
-		if len(kvpair) != 2 {
-			return fmt.Errorf("invalid map item: %q", pair)
-		}
-		err := json.Unmarshal([]byte(kvpair[1]), &providerdata)
-		if err != nil {
-			return fmt.Errorf("invalid map json: %w", err)
-		}
-		smsProvider[kvpair[0]] = providerdata
-
+	if err := structconfig.Process("myapp", &cfg); err != nil {
+		log.Fatal(err)
 	}
-	*sd = SMSProviderDecoder(smsProvider)
-	return nil
-}
 
-type SMSProviderConfig struct {
-    ProviderWithWeight SMSProviderDecoder `envconfig:"SMS_PROVIDER_WITH_WEIGHT"`
+	fmt.Printf("%+v\n", cfg)
 }
 ```
 
-Also, envconfig will use a `Set(string) error` method like from the
-[flag.Value](https://godoc.org/flag#Value) interface if implemented.
+Run it with an explicit config file and an overriding flag:
+
+```bash
+myapp --config ./config.toml --port 9090
+```
+
+In that example:
+
+- `debug` comes from the file
+- `user` comes from `MYAPP_USER`
+- `port` comes from `--port`
+- any field left unset falls back to its `default` tag or the zero value
+
+## API
+
+Use the package-level helpers when the defaults are enough:
+
+```go
+err := structconfig.Process("myapp", &cfg)
+structconfig.MustProcess("myapp", &cfg)
+```
+
+Use `NewStructConfig` when you need custom options:
+
+```go
+config := structconfig.NewStructConfig(&structconfig.Options{
+	ConfigType: "yaml",
+	VersionFunc: func() string {
+		return "myapp 1.2.3"
+	},
+	Tags: structconfig.OptionTags{
+		FileTag: "mapstructure",
+	},
+	FlagNames: structconfig.OptionFlagNames{
+		Debug: "config-debug",
+	},
+})
+
+err := config.Process("myapp", &cfg)
+```
+
+## Struct Tags
+
+`structconfig` reads these tags:
+
+| Tag | Meaning |
+| --- | --- |
+| `env` | Override the environment variable name for a field. Use `"-"` to disable env binding. |
+| `flag` | Override the generated CLI flag name. Use `"-"` to disable the flag. |
+| `short` | Define a one-letter shorthand flag alias. Use `"-"` to disable shorthand. |
+| `file` | Override the config file key for a field. This tag name is configurable through `Options.Tags.FileTag`. |
+| `default` | Default value used when no higher-priority source provides a value. |
+| `required` | Mark the field as required. Missing values return an error. |
+| `desc` | Extra description appended to the generated flag help text. |
+| `ignored` | Skip the field entirely. |
+| `split_words` | Split CamelCase field names into `UPPER_SNAKE_CASE` for env lookup. |
+
+Examples:
+
+```go
+type Config struct {
+	Port        int    `default:"8080" short:"p"`
+	ServiceHost string `env:"SERVICE_HOST"`
+	LogLevel    string `flag:"log-level" file:"log.level"`
+	APIKey      string `required:"true" split_words:"true"`
+	Secret      string `ignored:"true"`
+}
+```
+
+### Naming Rules
+
+- Environment variable names default to `PREFIX_FIELDNAME` in uppercase.
+- With `split_words:"true"`, `AutoSplitVar` becomes `PREFIX_AUTO_SPLIT_VAR`.
+- Config file keys default to the field name, lowercased.
+- Nested struct fields use dot-separated keys internally, and generated flags replace dots with dashes.
+- Anonymous embedded structs are flattened into the parent scope.
+
+## Config Files
+
+Config files are only read when `--config` is provided.
+
+Supported formats:
+
+- TOML
+- YAML
+
+The config type defaults to `toml` and can be changed by either:
+
+- `Options.ConfigType`
+- `--config-type toml|yaml`
+
+Example:
+
+```bash
+myapp --config ./config.yaml --config-type yaml
+```
+
+## Built-In Flags
+
+Every `Process` call registers these built-in flags in addition to the flags derived from your struct:
+
+| Flag | Meaning |
+| --- | --- |
+| `--config`, `-c` | Path to a config file. |
+| `--config-type`, `-t` | Config file format, `toml` or `yaml`. |
+| `--default-config`, `-p` | Print a config file containing defaults and zero values, then exit. |
+| `--version`, `-V` | Print the string from `VersionFunc`, then exit. |
+| `--debug`, `-d` | Print config debug info and exit. The long flag name is customizable through `Options.FlagNames.Debug`. |
+
+## Supported Field Types
+
+The current implementation supports these field types when decoding into the target struct:
+
+- `string`
+- `bool`
+- `int`, `int8`, `int16`, `int32`, `int64`
+- `uint`, `uint8`, `uint16`, `uint32`, `uint64`
+- `float32`, `float64`
+- `time.Duration`
+- slices of supported scalar types
+- `map[string]string`
+- `map[string]int`
+- `map[string]int64`
+- pointers to supported types
+- nested and embedded structs
+
+CLI flag registration is narrower than file and env decoding for maps: only `map[string]string`, `map[string]int`, and `map[string]int64` are supported as flags.
+
+## Defaults, Required Values, and Zero Values
+
+- `default` tags are applied first.
+- A config file overrides defaults.
+- Environment variables override the config file.
+- CLI flags override everything else.
+- `required:"true"` checks whether any source provided a value for the field.
+- If no source provides a value and no `default` tag is present, the field keeps its Go zero value.
+
+## Notes
+
+- The package expects a pointer to a struct. Passing anything else returns `ErrInvalidSpecification`.
+- `MustProcess` panics on error.
+- Missing config files are treated as non-fatal when a path is supplied; decoding continues with the remaining sources.
