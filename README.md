@@ -1,14 +1,16 @@
-# envconfig
-
-[![Build Status](https://travis-ci.org/kelseyhightower/envconfig.svg)](https://travis-ci.org/kelseyhightower/envconfig)
+# structconfig
 
 ```Go
-import "github.com/kelseyhightower/envconfig"
+import "github.com/justakit/structconfig"
 ```
+
+Populates configuration structure with config values from environment, flags, file and defaults
+
+Based on github.com/kelseyhightower/envconfig package
 
 ## Documentation
 
-See [godoc](http://godoc.org/github.com/kelseyhightower/envconfig)
+See [godoc](http://godoc.org/github.com/justakit/structconfig)
 
 ## Usage
 
@@ -34,22 +36,22 @@ import (
     "log"
     "time"
 
-    "github.com/kelseyhightower/envconfig"
+    "github.com/justakit/structconfig"
 )
 
 type Specification struct {
-    Debug       bool
+    Debug       bool `default:"true" env:"debug"`
     Port        int
     User        string
     Users       []string
     Rate        float32
     Timeout     time.Duration
-    ColorCodes  map[string]int
+    ColorCodes  map[string]int `flag:"color-code"
 }
 
 func main() {
     var s Specification
-    err := envconfig.Process("myapp", &s)
+    err := structconfig.Process("myapp", &s)
     if err != nil {
         log.Fatal(err.Error())
     }

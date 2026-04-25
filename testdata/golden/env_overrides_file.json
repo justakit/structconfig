@@ -1,0 +1,43 @@
+{
+  "spec": {
+    "Enabled": false,
+    "EmbeddedPort": 0,
+    "EmbeddedAlt": "",
+    "EmbeddedIgnored": "",
+    "FirstEmbeddedButIgnored": "",
+    "SecondEmbeddedButIgnored": "",
+    "Debug": false,
+    "Port": 9999,
+    "Rate": 3.14,
+    "User": "env-user",
+    "TTL": 99,
+    "Timeout": 0,
+    "AdminUsers": [],
+    "MagicNumbers": [],
+    "EmptyNumbers": [],
+    "ColorCodes": {},
+    "MultiWordVar": "",
+    "MultiWordVarWithAutoSplit": 0,
+    "MultiWordACRWithAutoSplit": 0,
+    "SomePointer": "",
+    "SomePointerWithDefault": "foo2baz",
+    "MultiWordVarWithAlt": "",
+    "MultiWordVarWithLowerCaseAlt": "",
+    "NoPrefixWithAlt": "",
+    "DefaultVar": "foobar",
+    "RequiredVar": "file-required",
+    "NoPrefixDefault": "127.0.0.1",
+    "RequiredDefault": "foo2bar",
+    "Ignored": "",
+    "NestedSpecification": {
+      "Property": "file-nested",
+      "PropertyWithDefault": "fuzzybydefault",
+      "IntProperty": 42
+    },
+    "AfterNested": "file-after",
+    "MapField": {
+      "one": "two",
+      "three": "four"
+    }
+  }
+}

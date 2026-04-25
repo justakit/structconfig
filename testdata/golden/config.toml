@@ -1,0 +1,10 @@
+port = 7777
+user = "from-file"
+requiredvar = "file-required"
+afternested = "file-after"
+rate = 3.14
+ttl = 99
+
+[outer]
+inner = "file-nested"
+intproperty = 42
