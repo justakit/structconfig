@@ -424,8 +424,10 @@ func TestEmbeddedStruct(t *testing.T) {
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "required")
 	os.Setenv("ENV_CONFIG_ENABLED", "true")
 	os.Setenv("ENV_CONFIG_EMBEDDEDPORT", "1234")
-	os.Setenv("ENV_CONFIG_MULTIWORDVAR", "foo")
+	os.Setenv("ENV_CONFIG_MULTIWORDVAR", "foo_top")
+	os.Setenv("ENV_CONFIG_MULTIWORDVARNESTED", "foo")
 	os.Setenv("ENV_CONFIG_MULTI_WORD_VAR_WITH_ALT", "bar")
+	os.Setenv("ENV_CONFIG_MULTIWORDVARNESTEDALT", "bar_nested")
 	os.Setenv("ENV_CONFIG_MULTI_WITH_DIFFERENT_ALT", "baz")
 	os.Setenv("ENV_CONFIG_EMBEDDED_WITH_ALT", "foobar")
 	os.Setenv("ENV_CONFIG_SOMEPOINTER", "foobaz")
@@ -446,8 +448,8 @@ func TestEmbeddedStruct(t *testing.T) {
 	if s.EmbeddedPort != 1234 {
 		t.Errorf("expected %d, got %v", 1234, s.EmbeddedPort)
 	}
-	if s.MultiWordVar != "foo" {
-		t.Errorf("expected %s, got %s", "foo", s.MultiWordVar)
+	if s.MultiWordVar != "foo_top" {
+		t.Errorf("expected %s, got %s", "foo_top", s.MultiWordVar)
 	}
 	if s.Embedded.MultiWordVar != "foo" {
 		t.Errorf("expected %s, got %s", "foo", s.Embedded.MultiWordVar)
@@ -455,8 +457,8 @@ func TestEmbeddedStruct(t *testing.T) {
 	if s.MultiWordVarWithAlt != "bar" {
 		t.Errorf("expected %s, got %s", "bar", s.MultiWordVarWithAlt)
 	}
-	if s.Embedded.MultiWordVarWithAlt != "baz" {
-		t.Errorf("expected %s, got %s", "baz", s.Embedded.MultiWordVarWithAlt)
+	if s.Embedded.MultiWordVarWithAlt != "bar_nested" {
+		t.Errorf("expected %s, got %s", "bar_nested", s.Embedded.MultiWordVarWithAlt)
 	}
 	if s.EmbeddedAlt != "foobar" {
 		t.Errorf("expected %s, got %s", "foobar", s.EmbeddedAlt)
@@ -526,8 +528,13 @@ func TestNestedStructVarName(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "required")
 	val := "found with only short name"
-	os.Setenv("INNER", val)
-	if err := structconfig.Process("env_config", &s); err != nil {
+	os.Setenv("ENV_CONFIG_OUTER_INNER", val)
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		Tags: structconfig.OptionTags{
+			FileTag: "envconfig",
+		},
+	})
+	if err := cfg.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 	if s.NestedSpecification.Property != val {
