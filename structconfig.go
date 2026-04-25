@@ -1,9 +1,9 @@
 package structconfig
 
 import (
-	"maps"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"reflect"
 	"regexp"
@@ -290,7 +290,13 @@ func (s *StructConfig) Process(prefix string, spec any) error {
 		return err
 	}
 
-	return s.unmarshalInto(merged, spec)
+	if err = s.unmarshalInto(merged, spec); err != nil {
+		return err
+	}
+
+	initNilMaps(reflect.ValueOf(spec).Elem())
+
+	return nil
 }
 
 // buildMerged assembles a flat dot-keyed map from all sources in priority order:
@@ -403,6 +409,34 @@ func (s *StructConfig) unmarshalInto(m map[string]any, target any) error {
 		return err
 	}
 	return decoder.Decode(expandKeys(m))
+}
+
+func initNilMaps(v reflect.Value) {
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return
+	}
+	for i := range v.NumField() {
+		f := v.Field(i)
+		if !f.CanSet() {
+			continue
+		}
+		switch f.Kind() {
+		case reflect.Map:
+			if f.IsNil() {
+				f.Set(reflect.MakeMap(f.Type()))
+			}
+		case reflect.Struct:
+			initNilMaps(f)
+		case reflect.Pointer:
+			initNilMaps(f)
+		}
+	}
 }
 
 func (s *StructConfig) checkRequired(merged map[string]any) error {
