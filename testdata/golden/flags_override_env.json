@@ -1,0 +1,43 @@
+{
+  "spec": {
+    "Enabled": false,
+    "EmbeddedPort": 0,
+    "EmbeddedAlt": "",
+    "EmbeddedIgnored": "",
+    "FirstEmbeddedButIgnored": "",
+    "SecondEmbeddedButIgnored": "",
+    "Debug": false,
+    "Port": 9090,
+    "Rate": 0,
+    "User": "",
+    "TTL": 0,
+    "Timeout": 0,
+    "AdminUsers": [],
+    "MagicNumbers": [],
+    "EmptyNumbers": [],
+    "ColorCodes": {},
+    "MultiWordVar": "",
+    "MultiWordVarWithAutoSplit": 0,
+    "MultiWordACRWithAutoSplit": 0,
+    "SomePointer": "",
+    "SomePointerWithDefault": "foo2baz",
+    "MultiWordVarWithAlt": "",
+    "MultiWordVarWithLowerCaseAlt": "",
+    "NoPrefixWithAlt": "",
+    "DefaultVar": "foobar",
+    "RequiredVar": "foo",
+    "NoPrefixDefault": "127.0.0.1",
+    "RequiredDefault": "foo2bar",
+    "Ignored": "",
+    "NestedSpecification": {
+      "Property": "",
+      "PropertyWithDefault": "fuzzybydefault",
+      "IntProperty": 0
+    },
+    "AfterNested": "",
+    "MapField": {
+      "one": "two",
+      "three": "four"
+    }
+  }
+}

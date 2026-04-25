@@ -1,0 +1,54 @@
+{
+  "spec": {
+    "Enabled": false,
+    "EmbeddedPort": 0,
+    "EmbeddedAlt": "",
+    "EmbeddedIgnored": "",
+    "FirstEmbeddedButIgnored": "",
+    "SecondEmbeddedButIgnored": "",
+    "Debug": true,
+    "Port": 8080,
+    "Rate": 0.5,
+    "User": "Kelsey",
+    "TTL": 30,
+    "Timeout": 120000000000,
+    "AdminUsers": [
+      "John",
+      "Adam",
+      "Will"
+    ],
+    "MagicNumbers": [
+      0
+    ],
+    "EmptyNumbers": [],
+    "ColorCodes": {
+      "blue": 3,
+      "green": 2,
+      "red": 1
+    },
+    "MultiWordVar": "multi",
+    "MultiWordVarWithAutoSplit": 24,
+    "MultiWordACRWithAutoSplit": 25,
+    "SomePointer": "",
+    "SomePointerWithDefault": "foo2baz",
+    "MultiWordVarWithAlt": "",
+    "MultiWordVarWithLowerCaseAlt": "",
+    "NoPrefixWithAlt": "127.0.0.1",
+    "DefaultVar": "foobar",
+    "RequiredVar": "foo",
+    "NoPrefixDefault": "127.0.0.1",
+    "RequiredDefault": "foo2bar",
+    "Ignored": "",
+    "NestedSpecification": {
+      "Property": "iamnested",
+      "PropertyWithDefault": "fuzzybydefault",
+      "IntProperty": 0
+    },
+    "AfterNested": "after",
+    "MapField": {
+      "alpha": "beta",
+      "gamma": "delta"
+    }
+  },
+  "error": "decoding failed due to the following error(s):\n\ncannot parse 'MagicNumbers[0]' as int: strconv.ParseInt: parsing \"5,10,20\": invalid syntax"
+}
