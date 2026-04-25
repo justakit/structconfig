@@ -5,7 +5,6 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
-	"reflect"
 	"testing"
 
 	"github.com/justakit/structconfig"
@@ -23,7 +22,6 @@ type goldenScenario struct {
 	envVars    map[string]string
 	configFile string
 	args       []string
-	wantErr    bool
 }
 
 type goldenResult struct {
@@ -148,14 +146,12 @@ var scenarios = []goldenScenario{
 		},
 	},
 	{
-		name:    "required_missing",
-		wantErr: true,
+		name: "required_missing",
 	},
 }
 
 func TestGolden(t *testing.T) {
 	for _, sc := range scenarios {
-		sc := sc
 		t.Run(sc.name, func(t *testing.T) {
 			os.Clearenv()
 			for k, v := range sc.envVars {
@@ -190,6 +186,9 @@ func TestGolden(t *testing.T) {
 				if err != nil {
 					t.Fatalf("marshal: %v", err)
 				}
+				if err := os.MkdirAll(filepath.Dir(goldenPath), 0o755); err != nil {
+					t.Fatalf("mkdir golden: %v", err)
+				}
 				if err := os.WriteFile(goldenPath, data, 0o644); err != nil {
 					t.Fatalf("write golden: %v", err)
 				}
@@ -212,18 +211,16 @@ func TestGolden(t *testing.T) {
 
 func compareGolden(t *testing.T, name string, got, want goldenResult) {
 	t.Helper()
-	gotHasErr := got.Error != ""
-	wantHasErr := want.Error != ""
-	if gotHasErr != wantHasErr {
-		t.Errorf("%s: error presence mismatch\n  got error:  %q\n  want error: %q", name, got.Error, want.Error)
+	if got.Error != want.Error {
+		t.Errorf("%s: error mismatch\n  got:  %q\n  want: %q", name, got.Error, want.Error)
 		return
 	}
-	if gotHasErr {
+	if got.Error != "" {
 		return
 	}
-	if !reflect.DeepEqual(got.Spec, want.Spec) {
-		gotJSON, _ := json.MarshalIndent(got.Spec, "  ", "  ")
-		wantJSON, _ := json.MarshalIndent(want.Spec, "  ", "  ")
-		t.Errorf("%s: spec mismatch\n  got:\n  %s\n  want:\n  %s", name, gotJSON, wantJSON)
+	gotJSON, _ := json.MarshalIndent(got.Spec, "", "  ")
+	wantJSON, _ := json.MarshalIndent(want.Spec, "", "  ")
+	if string(gotJSON) != string(wantJSON) {
+		t.Errorf("%s: spec mismatch\n  got:\n%s\n  want:\n%s", name, gotJSON, wantJSON)
 	}
 }
