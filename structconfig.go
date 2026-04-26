@@ -102,7 +102,6 @@ type StructConfig struct {
 type Options struct {
 	VersionFunc VersionFunc
 	ConfigType  string
-	FileName    string
 	Tags        OptionTags
 	FlagNames   OptionFlagNames
 	FlagShorts  OptionFlagShorts
@@ -375,11 +374,13 @@ func (s *StructConfig) Process(prefix string, spec any) (string, error) {
 		return configOut, err
 	}
 
-	var configPath string
-
-	configPath, s.options.ConfigType, err = s.getConfigPathAndType()
+	configPath, configType, err := s.getConfigPathAndType()
 	if err != nil {
 		return "", err
+	}
+
+	if configType != "" {
+		s.options.ConfigType = configType
 	}
 
 	if err = s.readConfigFile(configPath); err != nil {
@@ -629,6 +630,10 @@ func (s *StructConfig) addBuiltInStringFlag(name, short, defVal, desc string) er
 }
 
 func (s *StructConfig) processVersionFlag() (string, error) {
+	if s.options.FlagNames.Version == skipBuiltInFlagValue {
+		return "", nil
+	}
+
 	showVersion, err := s.flags.GetBool(s.options.FlagNames.Version)
 	if err != nil {
 		return "", err
@@ -644,6 +649,10 @@ func (s *StructConfig) processVersionFlag() (string, error) {
 }
 
 func (s *StructConfig) processDefaultConfigFlag() (string, error) {
+	if s.options.FlagNames.DefaultConfig == skipBuiltInFlagValue {
+		return "", nil
+	}
+
 	printConfig, err := s.flags.GetBool(s.options.FlagNames.DefaultConfig)
 	if err != nil {
 		return "", err
@@ -740,6 +749,10 @@ func formatSourceTable(sources []keySource) string {
 }
 
 func (s *StructConfig) processDebugFlag(merged map[string]any) (string, error) {
+	if s.options.FlagNames.Debug == skipBuiltInFlagValue {
+		return "", nil
+	}
+
 	printDebug, err := s.flags.GetBool(s.options.FlagNames.Debug)
 	if err != nil {
 		return "", err
@@ -773,10 +786,19 @@ func (s *StructConfig) dumpConfig(config map[string]any) (string, error) {
 }
 
 func (s *StructConfig) getConfigPathAndType() (string, string, error) {
+	if s.options.FlagNames.ConfigPath == skipBuiltInFlagValue {
+		return "", "", nil
+	}
+
 	path, err := s.flags.GetString(s.options.FlagNames.ConfigPath)
 	if err != nil {
 		return "", "", err
 	}
+
+	if s.options.FlagNames.ConfigType == skipBuiltInFlagValue {
+		return path, "", nil
+	}
+
 	configType, err := s.flags.GetString(s.options.FlagNames.ConfigType)
 	if err != nil {
 		return "", "", err
@@ -858,9 +880,8 @@ func (s *StructConfig) addFlag(v *varInfo) error {
 		v.ShortFlag = ""
 	}
 
-	// Skip if already registered (anonymous embedded structs can share flag names).
 	if s.flags.Lookup(v.Flag) != nil {
-		return nil
+		return fmt.Errorf("found redefined flag for %q", v.Flag)
 	}
 
 	if v.ShortFlag != "" && s.flags.ShorthandLookup(v.ShortFlag) != nil {

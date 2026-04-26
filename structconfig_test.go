@@ -653,6 +653,86 @@ func TestBuiltInFlagNamesOverride(t *testing.T) {
 	})
 }
 
+func TestDisabledBuiltInConfigFlags(t *testing.T) {
+	type spec struct {
+		Value string `default:"fallback"`
+	}
+
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Run("config path disabled", func(t *testing.T) {
+		var s spec
+		os.Clearenv()
+		os.Args = []string{"app"}
+
+		cfg := structconfig.NewStructConfig(&structconfig.Options{
+			FlagNames: structconfig.OptionFlagNames{
+				ConfigPath: "-",
+				Debug:      "config-debug",
+			},
+		})
+
+		_, err := cfg.Process("", &s)
+		if err != nil {
+			t.Fatalf("unexpected error when config path is disabled: %v", err)
+		}
+		if s.Value != "fallback" {
+			t.Errorf("expected default value %q, got %q", "fallback", s.Value)
+		}
+	})
+
+	t.Run("config type disabled", func(t *testing.T) {
+		var s spec
+		os.Clearenv()
+
+		configPath := t.TempDir() + "/config.toml"
+		err := os.WriteFile(configPath, []byte("value = \"from-file\"\n"), 0o644)
+		if err != nil {
+			t.Fatalf("write config file: %v", err)
+		}
+
+		os.Args = []string{"app", "--config", configPath}
+
+		cfg := structconfig.NewStructConfig(&structconfig.Options{
+			FlagNames: structconfig.OptionFlagNames{
+				ConfigType: "-",
+				Debug:      "config-debug",
+			},
+		})
+
+		_, err = cfg.Process("", &s)
+		if err != nil {
+			t.Fatalf("unexpected error when config type is disabled: %v", err)
+		}
+		if s.Value != "from-file" {
+			t.Errorf("expected file value %q, got %q", "from-file", s.Value)
+		}
+	})
+
+	t.Run("config path and type both disabled", func(t *testing.T) {
+		var s spec
+		os.Clearenv()
+		os.Args = []string{"app", "--default-config"}
+
+		cfg := structconfig.NewStructConfig(&structconfig.Options{
+			FlagNames: structconfig.OptionFlagNames{
+				ConfigPath: "-",
+				ConfigType: "-",
+				Debug:      "config-debug",
+			},
+		})
+
+		out, err := cfg.Process("", &s)
+		if !errors.Is(err, structconfig.ErrDefaultConfigCalled) {
+			t.Fatalf("expected ErrDefaultConfigCalled, got %v", err)
+		}
+		if out == "" {
+			t.Fatal("expected non-empty default config output")
+		}
+	})
+}
+
 func TestOptionTagsOverride(t *testing.T) {
 	type customSpec struct {
 		Host string `myenv:"CUSTOM_HOST" myflag:"custom-host" myshort:"H" mydesc:"the hostname"`
