@@ -32,8 +32,9 @@ var gatherRegexp = regexp.MustCompile("([A-Z]+[a-z]*|[a-z]+|[0-9]+)")
 var acronymRegexp = regexp.MustCompile("([A-Z]+)([A-Z][^A-Z]+)")
 
 const (
-	skipTagValue      = "-"
-	defaultConfigType = "toml"
+	skipTagValue         = "-"
+	skipBuiltInFlagValue = "-"
+	defaultConfigType    = "toml"
 
 	tagRequired    = "required"
 	tagEnv         = "env"
@@ -56,7 +57,20 @@ const (
 	shortDefaultConfig = "p"
 	shortVersion       = "V"
 	shortDebug         = "d"
+
+	sourceDefault = "default"
+	sourceFile    = "file"
+	sourceEnv     = "env"
+	sourceFlag    = "flag"
+	sourceUnset   = "unset"
 )
+
+// keySource records the effective value and its origin for a single config key.
+type keySource struct {
+	Key    string
+	Value  string
+	Source string
+}
 
 // varInfo maintains information about the configuration variable.
 type varInfo struct {
@@ -374,7 +388,7 @@ func (s *StructConfig) Process(prefix string, spec any) (string, error) {
 
 	merged, err := s.buildMerged()
 	if err != nil {
-		return "", fmt.Errorf("build merged: %w", err)
+		return "", err
 	}
 
 	debugOut, err := s.processDebugFlag(merged)
@@ -428,7 +442,7 @@ func (s *StructConfig) buildMerged() (map[string]any, error) {
 
 		val, err := readFlagValue(s.flags, info)
 		if err != nil {
-			return nil, fmt.Errorf("read flag value: %w", err)
+			return nil, fmt.Errorf("source flag --%s (field %q, key %q): %w", info.Flag, info.Name, info.Key, err)
 		}
 
 		m[info.Key] = val
@@ -587,7 +601,7 @@ func (s *StructConfig) addBuiltInFlags() error {
 }
 
 func (s *StructConfig) addBuiltInBoolFlag(name, short, desc string) error {
-	if name == "" {
+	if name == "" || name == skipBuiltInFlagValue {
 		return nil
 	}
 	if s.flags.Lookup(name) != nil {
@@ -601,7 +615,7 @@ func (s *StructConfig) addBuiltInBoolFlag(name, short, desc string) error {
 }
 
 func (s *StructConfig) addBuiltInStringFlag(name, short, defVal, desc string) error {
-	if name == "" {
+	if name == "" || name == skipBuiltInFlagValue {
 		return nil
 	}
 	if s.flags.Lookup(name) != nil {
@@ -652,6 +666,79 @@ func (s *StructConfig) processDefaultConfigFlag() (string, error) {
 	return out, ErrDefaultConfigCalled
 }
 
+// buildSourceAttribution walks each known field and records the highest-priority
+// source that provided its value (default < file < env < flag).
+func (s *StructConfig) buildSourceAttribution() []keySource {
+	fileFlat := flattenMap("", s.fileData)
+	result := make([]keySource, 0, len(s.infos))
+	for _, info := range s.infos {
+		ks := keySource{Key: info.Key, Value: "<unset>", Source: sourceUnset}
+
+		if info.Default != "" {
+			ks.Value = info.Default
+			ks.Source = sourceDefault
+		}
+
+		if _, ok := fileFlat[info.Key]; ok {
+			ks.Value = fmt.Sprint(fileFlat[info.Key])
+			ks.Source = sourceFile
+		}
+
+		if info.Env != skipTagValue && info.Env != "" {
+			if val, ok := os.LookupEnv(info.Env); ok {
+				ks.Value = val
+				ks.Source = fmt.Sprintf("%s (%s)", sourceEnv, info.Env)
+			}
+		}
+
+		if info.Flag != skipTagValue && info.Flag != "" {
+			f := s.flags.Lookup(info.Flag)
+			if f != nil && f.Changed {
+				ks.Value = f.Value.String()
+				ks.Source = fmt.Sprintf("%s (--%s)", sourceFlag, info.Flag)
+			}
+		}
+
+		result = append(result, ks)
+	}
+	return result
+}
+
+// formatSourceTable renders a fixed-width table of key/value/source rows.
+func formatSourceTable(sources []keySource) string {
+	const (
+		hKey    = "KEY"
+		hValue  = "VALUE"
+		hSource = "SOURCE"
+	)
+	wKey, wValue, wSource := len(hKey), len(hValue), len(hSource)
+	for _, ks := range sources {
+		if l := len(ks.Key); l > wKey {
+			wKey = l
+		}
+		if l := len(ks.Value); l > wValue {
+			wValue = l
+		}
+		if l := len(ks.Source); l > wSource {
+			wSource = l
+		}
+	}
+
+	var b strings.Builder
+	rowFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds\n", wKey, wValue, wSource)
+	sepFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds\n", wKey, wValue, wSource)
+	fmt.Fprintf(&b, rowFmt, hKey, hValue, hSource)
+	fmt.Fprintf(&b, sepFmt,
+		strings.Repeat("-", wKey),
+		strings.Repeat("-", wValue),
+		strings.Repeat("-", wSource),
+	)
+	for _, ks := range sources {
+		fmt.Fprintf(&b, rowFmt, ks.Key, ks.Value, ks.Source)
+	}
+	return b.String()
+}
+
 func (s *StructConfig) processDebugFlag(merged map[string]any) (string, error) {
 	printDebug, err := s.flags.GetBool(s.options.FlagNames.Debug)
 	if err != nil {
@@ -660,11 +747,12 @@ func (s *StructConfig) processDebugFlag(merged map[string]any) (string, error) {
 	if !printDebug {
 		return "", nil
 	}
-	out, err := s.dumpConfig(expandKeys(merged))
+	configOut, err := s.dumpConfig(expandKeys(merged))
 	if err != nil {
 		return "", err
 	}
-	return out, ErrDebugCalled
+	table := formatSourceTable(s.buildSourceAttribution())
+	return configOut + "\n" + table, ErrDebugCalled
 }
 
 func (s *StructConfig) dumpConfig(config map[string]any) (string, error) {
@@ -733,9 +821,7 @@ func flattenMap(prefix string, m map[string]any) map[string]any {
 			key = prefix + "." + key
 		}
 		if nested, ok := v.(map[string]any); ok {
-			for nk, nv := range flattenMap(key, nested) {
-				out[nk] = nv
-			}
+			maps.Copy(out, flattenMap(key, nested))
 		} else {
 			out[key] = v
 		}
