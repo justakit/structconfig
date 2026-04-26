@@ -42,6 +42,12 @@ const (
 	flagDefaultConfig = "default-config"
 	flagVersion       = "version"
 	flagDebug         = "debug"
+
+	shortConfigPath    = "c"
+	shortConfigType    = "t"
+	shortDefaultConfig = "p"
+	shortVersion       = "V"
+	shortDebug         = "d"
 )
 
 // varInfo maintains information about the configuration variable.
@@ -79,14 +85,31 @@ type Options struct {
 	FileName    string
 	Tags        OptionTags
 	FlagNames   OptionFlagNames
+	FlagShorts  OptionFlagShorts
 }
 
 type OptionTags struct {
-	FileTag string
+	FileTag  string
+	FlagTag  string
+	ShortTag string
+	EnvTag   string
+	DescTag  string
 }
 
 type OptionFlagNames struct {
-	Debug string
+	ConfigPath    string
+	ConfigType    string
+	DefaultConfig string
+	Version       string
+	Debug         string
+}
+
+type OptionFlagShorts struct {
+	ConfigPath    string
+	ConfigType    string
+	DefaultConfig string
+	Version       string
+	Debug         string
 }
 
 func (o *Options) fillDefaults() *Options {
@@ -106,6 +129,62 @@ func (o *Options) fillDefaults() *Options {
 		o.Tags.FileTag = tagFile
 	}
 
+	if o.Tags.FlagTag == "" {
+		o.Tags.FlagTag = tagFlag
+	}
+
+	if o.Tags.ShortTag == "" {
+		o.Tags.ShortTag = tagShortFlag
+	}
+
+	if o.Tags.EnvTag == "" {
+		o.Tags.EnvTag = tagEnv
+	}
+
+	if o.Tags.DescTag == "" {
+		o.Tags.DescTag = tagDescription
+	}
+
+	if o.FlagNames.ConfigPath == "" {
+		o.FlagNames.ConfigPath = flagConfigPath
+	}
+
+	if o.FlagNames.ConfigType == "" {
+		o.FlagNames.ConfigType = flagConfigType
+	}
+
+	if o.FlagNames.DefaultConfig == "" {
+		o.FlagNames.DefaultConfig = flagDefaultConfig
+	}
+
+	if o.FlagNames.Version == "" {
+		o.FlagNames.Version = flagVersion
+	}
+
+	if o.FlagNames.Debug == "" {
+		o.FlagNames.Debug = flagDebug
+	}
+
+	if o.FlagShorts.ConfigPath == "" {
+		o.FlagShorts.ConfigPath = shortConfigPath
+	}
+
+	if o.FlagShorts.ConfigType == "" {
+		o.FlagShorts.ConfigType = shortConfigType
+	}
+
+	if o.FlagShorts.DefaultConfig == "" {
+		o.FlagShorts.DefaultConfig = shortDefaultConfig
+	}
+
+	if o.FlagShorts.Version == "" {
+		o.FlagShorts.Version = shortVersion
+	}
+
+	if o.FlagShorts.Debug == "" {
+		o.FlagShorts.Debug = shortDebug
+	}
+
 	return o
 }
 
@@ -113,7 +192,7 @@ func (o *Options) fillDefaults() *Options {
 func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo, error) {
 	specValue := reflect.ValueOf(spec)
 
-	if specValue.Kind() != reflect.Ptr {
+	if specValue.Kind() != reflect.Pointer {
 		return nil, ErrInvalidSpecification
 	}
 
@@ -132,7 +211,7 @@ func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo
 			continue
 		}
 
-		for f.Kind() == reflect.Ptr {
+		for f.Kind() == reflect.Pointer {
 			if f.IsNil() {
 				if f.Type().Elem().Kind() != reflect.Struct {
 					break
@@ -149,12 +228,12 @@ func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo
 
 		info := varInfo{
 			Name:        ftype.Name,
-			Env:         ftype.Tag.Get(tagEnv),
-			Flag:        ftype.Tag.Get(tagFlag),
+			Env:         ftype.Tag.Get(s.options.Tags.EnvTag),
+			Flag:        ftype.Tag.Get(s.options.Tags.FlagTag),
 			File:        ftype.Tag.Get(s.options.Tags.FileTag),
-			ShortFlag:   ftype.Tag.Get(tagShortFlag),
+			ShortFlag:   ftype.Tag.Get(s.options.Tags.ShortTag),
 			Default:     ftype.Tag.Get(tagDefault),
-			Description: ftype.Tag.Get(tagDescription),
+			Description: ftype.Tag.Get(s.options.Tags.DescTag),
 			Required:    required,
 			typ:         ftype.Type,
 			field:       f,
@@ -261,7 +340,9 @@ func (s *StructConfig) Process(prefix string, spec any) error {
 		}
 	}
 
-	s.addBuiltInFlags()
+	if err = s.addBuiltInFlags(); err != nil {
+		return fmt.Errorf("add built-in flags: %w", err)
+	}
 
 	if err = s.flags.Parse(os.Args[1:]); err != nil {
 		return fmt.Errorf("parse flags: %w", err)
@@ -340,7 +421,7 @@ func (s *StructConfig) buildMerged() map[string]any {
 // readFlagValue reads a typed value from a pflag flag based on the field's reflect type.
 func readFlagValue(flags *pflag.FlagSet, info varInfo) (any, error) {
 	typ := info.typ
-	if typ.Kind() == reflect.Ptr {
+	if typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
 
@@ -464,16 +545,52 @@ func (s *StructConfig) MustProcess(prefix string, spec interface{}) {
 	}
 }
 
-func (s *StructConfig) addBuiltInFlags() {
-	s.flags.StringP(flagConfigPath, "c", "", "explicit path to application config")
-	s.flags.StringP(flagConfigType, "t", s.options.ConfigType, "config file type")
-	s.flags.BoolP(flagDefaultConfig, "p", false, "print default config to stdout and exit")
-	s.flags.BoolP(s.options.FlagNames.Debug, "d", false, "print config debug info and exit")
-	s.flags.BoolP(flagVersion, "V", false, "print application version info and exit")
+func (s *StructConfig) addBuiltInFlags() error {
+	if err := s.addBuiltInStringFlag(s.options.FlagNames.ConfigPath, s.options.FlagShorts.ConfigPath, "", "explicit path to application config"); err != nil {
+		return err
+	}
+	if err := s.addBuiltInStringFlag(s.options.FlagNames.ConfigType, s.options.FlagShorts.ConfigType, s.options.ConfigType, "config file type"); err != nil {
+		return err
+	}
+	if err := s.addBuiltInBoolFlag(s.options.FlagNames.DefaultConfig, s.options.FlagShorts.DefaultConfig, "print default config to stdout and exit"); err != nil {
+		return err
+	}
+	if err := s.addBuiltInBoolFlag(s.options.FlagNames.Debug, s.options.FlagShorts.Debug, "print config debug info and exit"); err != nil {
+		return err
+	}
+	return s.addBuiltInBoolFlag(s.options.FlagNames.Version, s.options.FlagShorts.Version, "print application version info and exit")
+}
+
+func (s *StructConfig) addBuiltInBoolFlag(name, short, desc string) error {
+	if name == "" {
+		return nil
+	}
+	if s.flags.Lookup(name) != nil {
+		return fmt.Errorf("built-in flag %q conflicts with a field flag", name)
+	}
+	if short != "" && s.flags.ShorthandLookup(short) != nil {
+		return fmt.Errorf("built-in flag %q short %q conflicts with a field flag", name, short)
+	}
+	s.flags.BoolP(name, short, false, desc)
+	return nil
+}
+
+func (s *StructConfig) addBuiltInStringFlag(name, short, defVal, desc string) error {
+	if name == "" {
+		return nil
+	}
+	if s.flags.Lookup(name) != nil {
+		return fmt.Errorf("built-in flag %q conflicts with a field flag", name)
+	}
+	if short != "" && s.flags.ShorthandLookup(short) != nil {
+		return fmt.Errorf("built-in flag %q short %q conflicts with a field flag", name, short)
+	}
+	s.flags.StringP(name, short, defVal, desc)
+	return nil
 }
 
 func (s *StructConfig) processVersionFlag() error {
-	showVersion, err := s.flags.GetBool(flagVersion)
+	showVersion, err := s.flags.GetBool(s.options.FlagNames.Version)
 	if err != nil {
 		return err
 	}
@@ -487,7 +604,7 @@ func (s *StructConfig) processVersionFlag() error {
 }
 
 func (s *StructConfig) processDefaultConfigFlag() error {
-	printConfig, err := s.flags.GetBool(flagDefaultConfig)
+	printConfig, err := s.flags.GetBool(s.options.FlagNames.DefaultConfig)
 	if err != nil {
 		return err
 	}
@@ -525,11 +642,11 @@ func (s *StructConfig) dumpConfig(config map[string]any) error {
 }
 
 func (s *StructConfig) getConfigPathAndType() (string, string, error) {
-	path, err := s.flags.GetString(flagConfigPath)
+	path, err := s.flags.GetString(s.options.FlagNames.ConfigPath)
 	if err != nil {
 		return "", "", err
 	}
-	configType, err := s.flags.GetString(flagConfigType)
+	configType, err := s.flags.GetString(s.options.FlagNames.ConfigType)
 	if err != nil {
 		return "", "", err
 	}

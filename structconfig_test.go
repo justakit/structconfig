@@ -2,6 +2,7 @@ package structconfig_test
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -510,8 +511,11 @@ func TestEmptyPrefixUsesFieldNames(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("REQUIREDVAR", "foo")
 
-	err := structconfig.Process("", &s)
-	if err != nil {
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
+	})
+	if err := cfg.Process("", &s); err != nil {
 		t.Errorf("Process failed: %s", err)
 	}
 
@@ -530,14 +534,149 @@ func TestNestedStructVarName(t *testing.T) {
 	val := "found with only short name"
 	os.Setenv("ENV_CONFIG_OUTER_INNER", val)
 	cfg := structconfig.NewStructConfig(&structconfig.Options{
-		Tags: structconfig.OptionTags{
-			FileTag: "envconfig",
-		},
+		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 	if err := cfg.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 	if s.NestedSpecification.Property != val {
 		t.Errorf("expected %s, got %s", val, s.NestedSpecification.Property)
+	}
+}
+
+func TestBuiltInFlagNameConflict(t *testing.T) {
+	type spec struct {
+		Debug bool // generates flag "debug", conflicts with built-in default
+	}
+
+	var s spec
+	os.Clearenv()
+
+	cfg := structconfig.NewStructConfig(nil) // FlagNames.Debug defaults to "debug"
+	err := cfg.Process("", &s)
+	if err == nil {
+		t.Fatal("expected conflict error, got nil")
+	}
+	if !strings.Contains(err.Error(), "conflicts with a field flag") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBuiltInShortFlagConflict(t *testing.T) {
+	type spec struct {
+		Config string `flag:"other" short:"c"` // short "c" conflicts with built-in ConfigPath short
+	}
+
+	var s spec
+	os.Clearenv()
+
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
+	})
+	err := cfg.Process("", &s)
+	if err == nil {
+		t.Fatal("expected short flag conflict error, got nil")
+	}
+	if !strings.Contains(err.Error(), "conflicts with a field flag") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
+func TestBuiltInFlagNamesOverride(t *testing.T) {
+	type spec struct {
+		Value string `default:"hello"`
+	}
+
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Run("custom long names accepted", func(t *testing.T) {
+		var s spec
+		os.Clearenv()
+		os.Args = []string{"app", "--cfg", "/nonexistent.toml"}
+
+		cfg := structconfig.NewStructConfig(&structconfig.Options{
+			FlagNames: structconfig.OptionFlagNames{
+				ConfigPath:    "cfg",
+				ConfigType:    "cfg-type",
+				DefaultConfig: "print-defaults",
+				Version:       "ver",
+				Debug:         "dbg",
+			},
+		})
+		if err := cfg.Process("", &s); err != nil {
+			t.Errorf("unexpected error with custom long flag names: %v", err)
+		}
+		if s.Value != "hello" {
+			t.Errorf("expected default value %q, got %q", "hello", s.Value)
+		}
+	})
+
+	t.Run("custom short name accepted", func(t *testing.T) {
+		var s spec
+		os.Clearenv()
+		os.Args = []string{"app", "-C", "/nonexistent.toml"}
+
+		cfg := structconfig.NewStructConfig(&structconfig.Options{
+			FlagNames:  structconfig.OptionFlagNames{Debug: "config-debug"},
+			FlagShorts: structconfig.OptionFlagShorts{ConfigPath: "C"},
+		})
+		if err := cfg.Process("", &s); err != nil {
+			t.Errorf("unexpected error with custom short flag: %v", err)
+		}
+	})
+
+	t.Run("default short rejected when overridden", func(t *testing.T) {
+		var s spec
+		os.Clearenv()
+		os.Args = []string{"app", "-c", "/nonexistent.toml"} // "c" no longer registered
+
+		cfg := structconfig.NewStructConfig(&structconfig.Options{
+			FlagNames:  structconfig.OptionFlagNames{Debug: "config-debug"},
+			FlagShorts: structconfig.OptionFlagShorts{ConfigPath: "C"},
+		})
+		err := cfg.Process("", &s)
+		if err == nil {
+			t.Fatal("expected error for unregistered short flag, got nil")
+		}
+	})
+}
+
+func TestOptionTagsOverride(t *testing.T) {
+	type customSpec struct {
+		Host string `myenv:"CUSTOM_HOST" myflag:"custom-host" myshort:"H" mydesc:"the hostname"`
+		Port int    `myenv:"CUSTOM_PORT" myflag:"custom-port"`
+		Name string // no custom tags - env var derived from field name
+	}
+
+	os.Clearenv()
+	os.Setenv("CUSTOM_HOST", "myhost")
+	os.Setenv("CUSTOM_PORT", "9090")
+	os.Setenv("NAME", "myname")
+
+	var s customSpec
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		Tags: structconfig.OptionTags{
+			EnvTag:   "myenv",
+			FlagTag:  "myflag",
+			ShortTag: "myshort",
+			DescTag:  "mydesc",
+		},
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
+	})
+
+	if err := cfg.Process("", &s); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if s.Host != "myhost" {
+		t.Errorf("Host: expected %q, got %q", "myhost", s.Host)
+	}
+	if s.Port != 9090 {
+		t.Errorf("Port: expected %d, got %d", 9090, s.Port)
+	}
+	if s.Name != "myname" {
+		t.Errorf("Name: expected %q, got %q", "myname", s.Name)
 	}
 }

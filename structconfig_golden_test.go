@@ -1,3 +1,5 @@
+//go:build golden
+
 package structconfig_test
 
 import (
