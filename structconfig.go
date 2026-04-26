@@ -62,7 +62,6 @@ const (
 type varInfo struct {
 	Default     string
 	typ         reflect.Type
-	field       reflect.Value
 	Name        string
 	Key         string
 	Env         string
@@ -80,11 +79,10 @@ var defaultVersionFunc VersionFunc = func() string {
 }
 
 type StructConfig struct {
-	flags     *pflag.FlagSet
-	options   *Options
-	infos     []varInfo
-	fileData  map[string]any
-	fileError error
+	flags    *pflag.FlagSet
+	options  *Options
+	infos    []varInfo
+	fileData map[string]any
 }
 
 type Options struct {
@@ -244,7 +242,6 @@ func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo
 			Description: ftype.Tag.Get(s.options.Tags.DescTag),
 			Required:    required,
 			typ:         ftype.Type,
-			field:       f,
 		}
 
 		if info.File != "" {
@@ -364,16 +361,21 @@ func (s *StructConfig) Process(prefix string, spec any) (string, error) {
 		return configOut, err
 	}
 
-	configPath, configType, err := s.getConfigPathAndType()
+	var configPath string
+
+	configPath, s.options.ConfigType, err = s.getConfigPathAndType()
 	if err != nil {
 		return "", err
 	}
 
-	if err = s.readConfigFile(configPath, configType); err != nil {
+	if err = s.readConfigFile(configPath); err != nil {
 		return "", fmt.Errorf("read config file: %w", err)
 	}
 
-	merged := s.buildMerged()
+	merged, err := s.buildMerged()
+	if err != nil {
+		return "", fmt.Errorf("build merged: %w", err)
+	}
 
 	debugOut, err := s.processDebugFlag(merged)
 	if err != nil {
@@ -395,7 +397,7 @@ func (s *StructConfig) Process(prefix string, spec any) (string, error) {
 
 // buildMerged assembles a flat dot-keyed map from all sources in priority order:
 // struct tag defaults < config file < environment variables < CLI flags.
-func (s *StructConfig) buildMerged() map[string]any {
+func (s *StructConfig) buildMerged() (map[string]any, error) {
 	m := make(map[string]any, len(s.infos))
 
 	for _, info := range s.infos {
@@ -423,12 +425,16 @@ func (s *StructConfig) buildMerged() map[string]any {
 		if f == nil || !f.Changed {
 			continue
 		}
-		if val, err := readFlagValue(s.flags, info); err == nil {
-			m[info.Key] = val
+
+		val, err := readFlagValue(s.flags, info)
+		if err != nil {
+			return nil, fmt.Errorf("read flag value: %w", err)
 		}
+
+		m[info.Key] = val
 	}
 
-	return m
+	return m, nil
 }
 
 // readFlagValue reads a typed value from a pflag flag based on the field's reflect type.
@@ -690,35 +696,28 @@ func (s *StructConfig) getConfigPathAndType() (string, string, error) {
 	return path, configType, nil
 }
 
-func (s *StructConfig) readConfigFile(path, configType string) error {
+func (s *StructConfig) readConfigFile(path string) error {
 	if path == "" {
 		return nil
 	}
 
 	data, err := os.ReadFile(path)
-	if errors.Is(err, os.ErrNotExist) {
-		s.fileError = errors.Join(err, os.ErrNotExist)
-		return nil
-	}
 	if err != nil {
 		return err
 	}
 
 	var raw map[string]any
-	switch configType {
+	switch s.options.ConfigType {
 	case "toml":
 		if err = toml.Unmarshal(data, &raw); err != nil {
-			s.fileError = err
-			return nil
+			return err
 		}
 	case "yaml":
 		if err = yaml.Unmarshal(data, &raw); err != nil {
-			s.fileError = err
-			return nil
+			return err
 		}
 	default:
-		s.fileError = fmt.Errorf("unsupported config type %s", configType)
-		return nil
+		return fmt.Errorf("unsupported config type %q", s.options.ConfigType)
 	}
 
 	s.fileData = raw
@@ -807,9 +806,9 @@ func (s *StructConfig) addFlag(v *varInfo) error {
 		s.flags.Int32P(v.Flag, v.ShortFlag, 0, descr)
 	case reflect.Int64:
 		if typ.PkgPath() == "time" && typ.Name() == "Duration" {
-			s.flags.Duration(v.Flag, 0, descr)
+			s.flags.DurationP(v.Flag, v.ShortFlag, 0, descr)
 		} else {
-			s.flags.Int64(v.Flag, 0, descr)
+			s.flags.Int64P(v.Flag, v.ShortFlag, 0, descr)
 		}
 	case reflect.Uint:
 		s.flags.UintP(v.Flag, v.ShortFlag, 0, descr)

@@ -138,7 +138,8 @@ out, err := config.Process("myapp", &cfg)
 
 - normal success: `"", nil`
 - `--version`: version text and `ErrVersionCalled`
-- `--default-config`: encoded config text and `ErrDefaultConfigCalled`- `--debug`: encoded merged config text (all sources applied) and `ErrDebugCalled`
+- `--default-config`: encoded config text and `ErrDefaultConfigCalled`
+- `--debug`: encoded merged config text (all sources applied) and `ErrDebugCalled`
 This package does not call `os.Exit`; callers decide whether to print output and exit.
 
 `Options.Tags` lets you rename the struct tags used by `structconfig`:

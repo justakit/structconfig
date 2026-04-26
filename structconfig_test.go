@@ -606,11 +606,14 @@ func TestBuiltInFlagNamesOverride(t *testing.T) {
 				Debug:         "dbg",
 			},
 		})
-		if _, err := cfg.Process("", &s); err != nil {
-			t.Errorf("unexpected error with custom long flag names: %v", err)
-		}
-		if s.Value != "hello" {
-			t.Errorf("expected default value %q, got %q", "hello", s.Value)
+
+		_, err := cfg.Process("", &s)
+		if err != nil {
+			if !strings.Contains(err.Error(), "no such file") || !strings.Contains(err.Error(), "/nonexistent.toml") {
+				t.Errorf("unexpected error with custom long flag names: %v", err)
+			}
+		} else {
+			t.Errorf("expected error with custom long flag names, got nil")
 		}
 	})
 
@@ -623,8 +626,14 @@ func TestBuiltInFlagNamesOverride(t *testing.T) {
 			FlagNames:  structconfig.OptionFlagNames{Debug: "config-debug"},
 			FlagShorts: structconfig.OptionFlagShorts{ConfigPath: "C"},
 		})
-		if _, err := cfg.Process("", &s); err != nil {
-			t.Errorf("unexpected error with custom short flag: %v", err)
+
+		_, err := cfg.Process("", &s)
+		if err != nil {
+			if !strings.Contains(err.Error(), "no such file") || !strings.Contains(err.Error(), "/nonexistent.toml") {
+				t.Errorf("unexpected error with custom short flag: %v", err)
+			}
+		} else {
+			t.Errorf("expected error with custom short flag, got nil")
 		}
 	})
 
