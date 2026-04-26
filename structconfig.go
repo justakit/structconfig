@@ -18,13 +18,13 @@ import (
 )
 
 // ErrInvalidSpecification indicates that a specification is of the wrong type.
-var ErrInvalidSpecification = errors.New("specification must be a struct pointer")
-
-// ErrVersionCalled is returned by Process when the --version flag is set.
-var ErrVersionCalled = errors.New("version flag was set")
-
-// ErrDefaultConfigCalled is returned by Process when the --default-config flag is set.
-var ErrDefaultConfigCalled = errors.New("default-config flag was set")
+// ErrVersionCalled will be returned by Process when the --version flag is set.
+// ErrDefaultConfigCalled will be returned by Process when the --default-config flag is set.
+var (
+	ErrInvalidSpecification = errors.New("specification must be a struct pointer")
+	ErrVersionCalled        = errors.New("version flag was set")
+	ErrDefaultConfigCalled  = errors.New("default-config flag was set")
+)
 
 var gatherRegexp = regexp.MustCompile("([A-Z]+[a-z]*|[a-z]+|[0-9]+)")
 var acronymRegexp = regexp.MustCompile("([A-Z]+)([A-Z][^A-Z]+)")
