@@ -139,7 +139,8 @@ out, err := config.Process("myapp", &cfg)
 - normal success: `"", nil`
 - `--version`: version text and `ErrVersionCalled`
 - `--default-config`: encoded config text and `ErrDefaultConfigCalled`
-- `--debug`: encoded merged config text (all sources applied) and `ErrDebugCalled`
+- `--debug`: encoded merged config + source attribution table and `ErrDebugCalled`
+
 This package does not call `os.Exit`; callers decide whether to print output and exit.
 
 `Options.Tags` lets you rename the struct tags used by `structconfig`:
@@ -161,6 +162,14 @@ This package does not call `os.Exit`; callers decide whether to print output and
 | `DefaultConfig` | `default-config` | `--default-config` flag name. |
 | `Version` | `version` | `--version` flag name. |
 | `Debug` | `debug` | Debug flag name (used for config output). |
+
+Setting any `FlagNames` field to `"-"` disables that built-in flag entirely. For example, to prevent users from invoking `--default-config`:
+
+```go
+FlagNames: structconfig.OptionFlagNames{
+	DefaultConfig: "-",
+}
+```
 
 `Options.FlagShorts` lets you customize the short aliases for built-in flags:
 
@@ -238,7 +247,21 @@ Every `Process` call registers these built-in flags in addition to the flags der
 | `--config-type`, `-t` | Config file format, `toml` or `yaml`. Both long and short names are customizable via `Options.FlagNames.ConfigType` and `Options.FlagShorts.ConfigType`. |
 | `--default-config`, `-p` | Returns a config string containing defaults and zero values through `Process` output with `ErrDefaultConfigCalled`. Both long and short names are customizable via `Options.FlagNames.DefaultConfig` and `Options.FlagShorts.DefaultConfig`. |
 | `--version`, `-V` | Returns the string from `VersionFunc` through `Process` output with `ErrVersionCalled`. Both long and short names are customizable via `Options.FlagNames.Version` and `Options.FlagShorts.Version`. |
-| `--debug`, `-d` | Returns the fully merged config (defaults → file → env → flags) as an encoded string through `Process` output with `ErrDebugCalled`. Both long and short names are customizable via `Options.FlagNames.Debug` and `Options.FlagShorts.Debug`. |
+| `--debug`, `-d` | Returns the fully merged config (defaults → file → env → flags) as an encoded string followed by a source attribution table through `Process` output with `ErrDebugCalled`. Both long and short names are customizable via `Options.FlagNames.Debug` and `Options.FlagShorts.Debug`. |
+
+The source attribution table appended to the `--debug` output shows which source provided the effective value for each key:
+
+```
+KEY              VALUE       SOURCE
+---------------  ----------  -----------------
+database.host    db.example  file
+port             9090        flag (--port)
+user             alice       env (MYAPP_USER)
+timeout          30s         default
+secret           <unset>     unset
+```
+
+Possible `SOURCE` values are `default`, `file`, `env (ENV_VAR)`, `flag (--flag-name)`, and `unset`.
 
 ## Supported Field Types
 

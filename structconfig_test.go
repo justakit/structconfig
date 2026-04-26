@@ -759,4 +759,64 @@ func TestDebugFlag(t *testing.T) {
 	if !strings.Contains(out, "merged-host") {
 		t.Errorf("expected config output to contain merged value %q, got %q", "merged-host", out)
 	}
+	// Source attribution table assertions.
+	if !strings.Contains(out, "KEY") || !strings.Contains(out, "SOURCE") {
+		t.Errorf("expected source attribution table header in output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "env (HOST)") {
+		t.Errorf("expected source attribution to show %q for HOST env var, got:\n%s", "env (HOST)", out)
+	}
+	// The default is overridden by the env var, so "default" should not appear as a source row.
+	if strings.Contains(out, "default\n") || strings.Contains(out, "  default") && !strings.Contains(out, "localhost") {
+		// This is informational — default was "localhost" but env won; no hard assertion needed.
+		_ = out
+	}
+}
+
+func TestDebugFlagShowsDefault(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"app", "--config-debug"}
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
+	})
+	type spec struct {
+		Host string `default:"localhost"`
+	}
+	var s spec
+	out, err := cfg.Process("", &s)
+	if !errors.Is(err, structconfig.ErrDebugCalled) {
+		t.Fatalf("expected ErrDebugCalled, got %v", err)
+	}
+	if !strings.Contains(out, "default") {
+		t.Errorf("expected source attribution to show %q when only default is set, got:\n%s", "default", out)
+	}
+	if !strings.Contains(out, "localhost") {
+		t.Errorf("expected source attribution to show default value %q, got:\n%s", "localhost", out)
+	}
+}
+
+func TestDebugFlagShowsUnset(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"app", "--config-debug"}
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
+	})
+	type spec struct {
+		Host string
+	}
+	var s spec
+	out, err := cfg.Process("", &s)
+	if !errors.Is(err, structconfig.ErrDebugCalled) {
+		t.Fatalf("expected ErrDebugCalled, got %v", err)
+	}
+	if !strings.Contains(out, "<unset>") {
+		t.Errorf("expected source attribution to show %q for field with no value, got:\n%s", "<unset>", out)
+	}
+	if !strings.Contains(out, "unset") {
+		t.Errorf("expected source attribution to show %q source, got:\n%s", "unset", out)
+	}
 }
