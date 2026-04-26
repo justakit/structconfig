@@ -1,6 +1,7 @@
 package structconfig_test
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -88,7 +89,7 @@ func TestProcess(t *testing.T) {
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
-	err := config.Process("env_config", &s)
+	_, err := config.Process("env_config", &s)
 	if err != nil {
 		t.Error(err.Error())
 	}
@@ -177,7 +178,7 @@ func TestParseErrorBool(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_DEBUG", "string")
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
-	err := structconfig.Process("env_config", &s)
+	_, err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Errorf("expected err")
 	}
@@ -188,7 +189,7 @@ func TestParseErrorFloat32(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_RATE", "string")
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
-	err := structconfig.Process("env_config", &s)
+	_, err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Errorf("expected err")
 	}
@@ -199,7 +200,7 @@ func TestParseErrorInt(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_PORT", "string")
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "foo")
-	err := structconfig.Process("env_config", &s)
+	_, err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Errorf("expected err")
 	}
@@ -209,7 +210,7 @@ func TestParseErrorUint(t *testing.T) {
 	var s Specification
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_TTL", "-30")
-	err := structconfig.Process("env_config", &s)
+	_, err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Errorf("expected err")
 	}
@@ -219,7 +220,7 @@ func TestParseErrorSplitWords(t *testing.T) {
 	var s Specification
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_MULTI_WORD_VAR_WITH_AUTO_SPLIT", "shakespeare")
-	err := structconfig.Process("env_config", &s)
+	_, err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Errorf("expected err")
 	}
@@ -236,7 +237,7 @@ func TestUnsetVars(t *testing.T) {
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
-	if err := config.Process("env_config", &s); err != nil {
+	if _, err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 
@@ -260,7 +261,7 @@ func TestAlternateVarNames(t *testing.T) {
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
-	if err := config.Process("env_config", &s); err != nil {
+	if _, err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 
@@ -292,7 +293,7 @@ func TestRequiredVar(t *testing.T) {
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
-	if err := config.Process("env_config", &s); err != nil {
+	if _, err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 
@@ -305,7 +306,7 @@ func TestRequiredMissing(t *testing.T) {
 	var s Specification
 	os.Clearenv()
 
-	err := structconfig.Process("env_config", &s)
+	_, err := structconfig.Process("env_config", &s)
 	if err == nil {
 		t.Error("no failure when missing required variable")
 	}
@@ -321,7 +322,7 @@ func TestBlankDefaultVar(t *testing.T) {
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
-	if err := config.Process("env_config", &s); err != nil {
+	if _, err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 
@@ -344,7 +345,7 @@ func TestNonBlankDefaultVar(t *testing.T) {
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
-	if err := config.Process("env_config", &s); err != nil {
+	if _, err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 
@@ -363,7 +364,7 @@ func TestRequiredDefault(t *testing.T) {
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
-	if err := config.Process("env_config", &s); err != nil {
+	if _, err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 
@@ -382,7 +383,7 @@ func TestPointerFieldBlank(t *testing.T) {
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
-	if err := config.Process("env_config", &s); err != nil {
+	if _, err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 
@@ -439,7 +440,7 @@ func TestEmbeddedStruct(t *testing.T) {
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
-	if err := config.Process("env_config", &s); err != nil {
+	if _, err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 
@@ -484,7 +485,7 @@ func TestEmbeddedButIgnoredStruct(t *testing.T) {
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
-	if err := config.Process("env_config", &s); err != nil {
+	if _, err := config.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 	if s.FirstEmbeddedButIgnored != "" {
@@ -500,7 +501,7 @@ func TestNonPointerFailsProperly(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("ENV_CONFIG_REQUIREDVAR", "snap")
 
-	err := structconfig.Process("env_config", s)
+	_, err := structconfig.Process("env_config", s)
 	if err != structconfig.ErrInvalidSpecification {
 		t.Errorf("non-pointer should fail with ErrInvalidSpecification, was instead %s", err)
 	}
@@ -515,7 +516,7 @@ func TestEmptyPrefixUsesFieldNames(t *testing.T) {
 		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
-	if err := cfg.Process("", &s); err != nil {
+	if _, err := cfg.Process("", &s); err != nil {
 		t.Errorf("Process failed: %s", err)
 	}
 
@@ -537,7 +538,7 @@ func TestNestedStructVarName(t *testing.T) {
 		Tags:      structconfig.OptionTags{FileTag: "envconfig"},
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
-	if err := cfg.Process("env_config", &s); err != nil {
+	if _, err := cfg.Process("env_config", &s); err != nil {
 		t.Error(err.Error())
 	}
 	if s.NestedSpecification.Property != val {
@@ -554,7 +555,7 @@ func TestBuiltInFlagNameConflict(t *testing.T) {
 	os.Clearenv()
 
 	cfg := structconfig.NewStructConfig(nil) // FlagNames.Debug defaults to "debug"
-	err := cfg.Process("", &s)
+	_, err := cfg.Process("", &s)
 	if err == nil {
 		t.Fatal("expected conflict error, got nil")
 	}
@@ -574,7 +575,7 @@ func TestBuiltInShortFlagConflict(t *testing.T) {
 	cfg := structconfig.NewStructConfig(&structconfig.Options{
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
-	err := cfg.Process("", &s)
+	_, err := cfg.Process("", &s)
 	if err == nil {
 		t.Fatal("expected short flag conflict error, got nil")
 	}
@@ -605,7 +606,7 @@ func TestBuiltInFlagNamesOverride(t *testing.T) {
 				Debug:         "dbg",
 			},
 		})
-		if err := cfg.Process("", &s); err != nil {
+		if _, err := cfg.Process("", &s); err != nil {
 			t.Errorf("unexpected error with custom long flag names: %v", err)
 		}
 		if s.Value != "hello" {
@@ -622,7 +623,7 @@ func TestBuiltInFlagNamesOverride(t *testing.T) {
 			FlagNames:  structconfig.OptionFlagNames{Debug: "config-debug"},
 			FlagShorts: structconfig.OptionFlagShorts{ConfigPath: "C"},
 		})
-		if err := cfg.Process("", &s); err != nil {
+		if _, err := cfg.Process("", &s); err != nil {
 			t.Errorf("unexpected error with custom short flag: %v", err)
 		}
 	})
@@ -636,7 +637,7 @@ func TestBuiltInFlagNamesOverride(t *testing.T) {
 			FlagNames:  structconfig.OptionFlagNames{Debug: "config-debug"},
 			FlagShorts: structconfig.OptionFlagShorts{ConfigPath: "C"},
 		})
-		err := cfg.Process("", &s)
+		_, err := cfg.Process("", &s)
 		if err == nil {
 			t.Fatal("expected error for unregistered short flag, got nil")
 		}
@@ -666,7 +667,7 @@ func TestOptionTagsOverride(t *testing.T) {
 		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 	})
 
-	if err := cfg.Process("", &s); err != nil {
+	if _, err := cfg.Process("", &s); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
@@ -678,5 +679,49 @@ func TestOptionTagsOverride(t *testing.T) {
 	}
 	if s.Name != "myname" {
 		t.Errorf("Name: expected %q, got %q", "myname", s.Name)
+	}
+}
+
+func TestVersionFlag(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"app", "--version"}
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		FlagNames:   structconfig.OptionFlagNames{Debug: "config-debug"},
+		VersionFunc: func() string { return "v1.2.3" },
+	})
+	type spec struct{}
+	var s spec
+	out, err := cfg.Process("", &s)
+	if !errors.Is(err, structconfig.ErrVersionCalled) {
+		t.Fatalf("expected ErrVersionCalled, got %v", err)
+	}
+	if out != "v1.2.3\n" {
+		t.Errorf("expected version string %q, got %q", "v1.2.3\n", out)
+	}
+}
+
+func TestDefaultConfigFlag(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"app", "--default-config"}
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
+	})
+	type spec struct {
+		Host string `default:"localhost"`
+	}
+	var s spec
+	out, err := cfg.Process("", &s)
+	if !errors.Is(err, structconfig.ErrDefaultConfigCalled) {
+		t.Fatalf("expected ErrDefaultConfigCalled, got %v", err)
+	}
+	if out == "" {
+		t.Error("expected non-empty config output")
+	}
+	if !strings.Contains(out, "localhost") {
+		t.Errorf("expected config output to contain %q, got %q", "localhost", out)
 	}
 }

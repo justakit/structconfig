@@ -18,7 +18,13 @@ import (
 )
 
 // ErrInvalidSpecification indicates that a specification is of the wrong type.
-var ErrInvalidSpecification = errors.New("specification must be a struct pointer")
+// ErrVersionCalled will be returned by Process when the --version flag is set.
+// ErrDefaultConfigCalled will be returned by Process when the --default-config flag is set.
+var (
+	ErrInvalidSpecification = errors.New("specification must be a struct pointer")
+	ErrVersionCalled        = errors.New("version flag was set")
+	ErrDefaultConfigCalled  = errors.New("default-config flag was set")
+)
 
 var gatherRegexp = regexp.MustCompile("([A-Z]+[a-z]*|[a-z]+|[0-9]+)")
 var acronymRegexp = regexp.MustCompile("([A-Z]+)([A-Z][^A-Z]+)")
@@ -317,67 +323,67 @@ func NewStructConfig(o *Options) *StructConfig {
 
 // Process populates the specified struct based on environment, flags, config file,
 // and default values with default options.
-func Process(prefix string, spec any) error {
+func Process(prefix string, spec any) (string, error) {
 	return NewStructConfig(nil).Process(prefix, spec)
 }
 
 // Process populates the specified struct based on environment, flags, config file,
 // and default values. Priority: flags > env vars > config file > struct tag defaults.
-func (s *StructConfig) Process(prefix string, spec any) error {
+func (s *StructConfig) Process(prefix string, spec any) (string, error) {
 	var err error
 
 	s.infos, err = s.gatherInfo("", prefix, spec)
 	if err != nil {
 		if errors.Is(err, ErrInvalidSpecification) {
-			return ErrInvalidSpecification
+			return "", ErrInvalidSpecification
 		}
-		return fmt.Errorf("gather info: %w", err)
+		return "", fmt.Errorf("gather info: %w", err)
 	}
 
 	for i := range s.infos {
 		if err = s.addFlag(&s.infos[i]); err != nil {
-			return fmt.Errorf("add flag: %w", err)
+			return "", fmt.Errorf("add flag: %w", err)
 		}
 	}
 
 	if err = s.addBuiltInFlags(); err != nil {
-		return fmt.Errorf("add built-in flags: %w", err)
+		return "", fmt.Errorf("add built-in flags: %w", err)
 	}
 
 	if err = s.flags.Parse(os.Args[1:]); err != nil {
-		return fmt.Errorf("parse flags: %w", err)
+		return "", fmt.Errorf("parse flags: %w", err)
 	}
 
-	if err = s.processVersionFlag(); err != nil {
-		return fmt.Errorf("process version: %w", err)
+	if versionOut, err := s.processVersionFlag(); err != nil {
+		return versionOut, err
 	}
 
-	if err = s.processDefaultConfigFlag(); err != nil {
-		return fmt.Errorf("process default config: %w", err)
+	if configOut, err := s.processDefaultConfigFlag(); err != nil {
+		return configOut, err
 	}
 
 	configPath, configType, err := s.getConfigPathAndType()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if err = s.readConfigFile(configPath, configType); err != nil {
-		return fmt.Errorf("read config file: %w", err)
+		return "", fmt.Errorf("read config file: %w", err)
 	}
 
 	merged := s.buildMerged()
 
 	if err = s.checkRequired(merged); err != nil {
-		return err
+		return "", err
 	}
 
 	if err = s.unmarshalInto(merged, spec); err != nil {
-		return err
+		return "", err
 	}
 
 	initNilMaps(reflect.ValueOf(spec).Elem())
 
-	return nil
+	return "", nil
 }
 
 // buildMerged assembles a flat dot-keyed map from all sources in priority order:
@@ -531,16 +537,22 @@ func (s *StructConfig) checkRequired(merged map[string]any) error {
 	return nil
 }
 
-// MustProcess is the same as Process but panics if an error occurs.
+// MustProcess is the same as Process but prints any output string to stdout and panics if an error occurs.
 func MustProcess(prefix string, spec interface{}) {
-	if err := Process(prefix, spec); err != nil {
+	if out, err := Process(prefix, spec); err != nil {
+		if out != "" {
+			fmt.Print(out)
+		}
 		panic(err)
 	}
 }
 
-// MustProcess is the same as Process but panics if an error occurs.
+// MustProcess is the same as Process but prints any output string to stdout and panics if an error occurs.
 func (s *StructConfig) MustProcess(prefix string, spec interface{}) {
-	if err := s.Process(prefix, spec); err != nil {
+	if out, err := s.Process(prefix, spec); err != nil {
+		if out != "" {
+			fmt.Print(out)
+		}
 		panic(err)
 	}
 }
@@ -589,30 +601,29 @@ func (s *StructConfig) addBuiltInStringFlag(name, short, defVal, desc string) er
 	return nil
 }
 
-func (s *StructConfig) processVersionFlag() error {
+func (s *StructConfig) processVersionFlag() (string, error) {
 	showVersion, err := s.flags.GetBool(s.options.FlagNames.Version)
 	if err != nil {
-		return err
+		return "", err
 	}
-
 	if showVersion {
-		fmt.Println(s.options.VersionFunc())
-		os.Exit(0)
+		v := s.options.VersionFunc()
+		if !strings.HasSuffix(v, "\n") {
+			v += "\n"
+		}
+		return v, ErrVersionCalled
 	}
-
-	return nil
+	return "", nil
 }
 
-func (s *StructConfig) processDefaultConfigFlag() error {
+func (s *StructConfig) processDefaultConfigFlag() (string, error) {
 	printConfig, err := s.flags.GetBool(s.options.FlagNames.DefaultConfig)
 	if err != nil {
-		return err
+		return "", err
 	}
-
 	if !printConfig {
-		return nil
+		return "", nil
 	}
-
 	defaults := make(map[string]any, len(s.infos))
 	for _, info := range s.infos {
 		if info.Default != "" {
@@ -621,24 +632,28 @@ func (s *StructConfig) processDefaultConfigFlag() error {
 			defaults[info.Key] = reflect.Zero(info.typ).Interface()
 		}
 	}
-
-	if err = s.dumpConfig(expandKeys(defaults)); err != nil {
-		return err
+	out, err := s.dumpConfig(expandKeys(defaults))
+	if err != nil {
+		return "", err
 	}
-
-	os.Exit(0)
-	return nil
+	return out, ErrDefaultConfigCalled
 }
 
-func (s *StructConfig) dumpConfig(config map[string]any) error {
+func (s *StructConfig) dumpConfig(config map[string]any) (string, error) {
+	var buf strings.Builder
 	switch s.options.ConfigType {
 	case "toml":
-		return toml.NewEncoder(os.Stdout).Encode(config)
+		if err := toml.NewEncoder(&buf).Encode(config); err != nil {
+			return "", err
+		}
 	case "yaml":
-		return yaml.NewEncoder(os.Stdout).Encode(config)
+		if err := yaml.NewEncoder(&buf).Encode(config); err != nil {
+			return "", err
+		}
 	default:
-		return fmt.Errorf("unsupported config type %s", s.options.ConfigType)
+		return "", fmt.Errorf("unsupported config type %s", s.options.ConfigType)
 	}
+	return buf.String(), nil
 }
 
 func (s *StructConfig) getConfigPathAndType() (string, string, error) {

@@ -173,7 +173,7 @@ func TestGolden(t *testing.T) {
 				Tags:      structconfig.OptionTags{FileTag: "envconfig"},
 				FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
 			})
-			err := config.Process("env_config", &s)
+			_, err := config.Process("env_config", &s)
 
 			errStr := ""
 			if err != nil {

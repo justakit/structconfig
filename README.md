@@ -70,7 +70,7 @@ type Config struct {
 func main() {
 	var cfg Config
 
-	if err := structconfig.Process("myapp", &cfg); err != nil {
+	if _, err := structconfig.Process("myapp", &cfg); err != nil {
 		log.Fatal(err)
 	}
 
@@ -96,7 +96,7 @@ In that example:
 Use the package-level helpers when the defaults are enough:
 
 ```go
-err := structconfig.Process("myapp", &cfg)
+out, err := structconfig.Process("myapp", &cfg)
 structconfig.MustProcess("myapp", &cfg)
 ```
 
@@ -131,8 +131,16 @@ config := structconfig.NewStructConfig(&structconfig.Options{
 	},
 })
 
-err := config.Process("myapp", &cfg)
+out, err := config.Process("myapp", &cfg)
 ```
+
+`Process` returns `(string, error)`:
+
+- normal success: `"", nil`
+- `--version`: version text and `ErrVersionCalled`
+- `--default-config`: encoded config text and `ErrDefaultConfigCalled`
+
+This package does not call `os.Exit`; callers decide whether to print output and exit.
 
 `Options.Tags` lets you rename the struct tags used by `structconfig`:
 
@@ -228,8 +236,8 @@ Every `Process` call registers these built-in flags in addition to the flags der
 | --- | --- | 
 | `--config`, `-c` | Path to a config file. Both long and short names are customizable via `Options.FlagNames.ConfigPath` and `Options.FlagShorts.ConfigPath`. |
 | `--config-type`, `-t` | Config file format, `toml` or `yaml`. Both long and short names are customizable via `Options.FlagNames.ConfigType` and `Options.FlagShorts.ConfigType`. |
-| `--default-config`, `-p` | Print a config file containing defaults and zero values, then exit. Both long and short names are customizable via `Options.FlagNames.DefaultConfig` and `Options.FlagShorts.DefaultConfig`. |
-| `--version`, `-V` | Print the string from `VersionFunc`, then exit. Both long and short names are customizable via `Options.FlagNames.Version` and `Options.FlagShorts.Version`. |
+| `--default-config`, `-p` | Returns a config string containing defaults and zero values through `Process` output with `ErrDefaultConfigCalled`. Both long and short names are customizable via `Options.FlagNames.DefaultConfig` and `Options.FlagShorts.DefaultConfig`. |
+| `--version`, `-V` | Returns the string from `VersionFunc` through `Process` output with `ErrVersionCalled`. Both long and short names are customizable via `Options.FlagNames.Version` and `Options.FlagShorts.Version`. |
 | `--debug`, `-d` | Print config debug info and exit. Both long and short names are customizable via `Options.FlagNames.Debug` and `Options.FlagShorts.Debug`. |
 
 ## Supported Field Types
@@ -263,5 +271,5 @@ CLI flag registration is narrower than file and env decoding for maps: only `map
 ## Notes
 
 - The package expects a pointer to a struct. Passing anything else returns `ErrInvalidSpecification`.
-- `MustProcess` panics on error.
+- `MustProcess` prints any non-empty output returned by `Process`, then panics on error.
 - Missing config files are treated as non-fatal when a path is supplied; decoding continues with the remaining sources.
