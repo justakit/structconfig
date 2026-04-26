@@ -295,4 +295,4 @@ CLI flag registration is narrower than file and env decoding for maps: only `map
 
 - The package expects a pointer to a struct. Passing anything else returns `ErrInvalidSpecification`.
 - `MustProcess` prints any non-empty output returned by `Process`, then panics on error.
-- Missing config files are treated as non-fatal when a path is supplied; decoding continues with the remaining sources.
+
