@@ -109,19 +109,64 @@ config := structconfig.NewStructConfig(&structconfig.Options{
 		return "myapp 1.2.3"
 	},
 	Tags: structconfig.OptionTags{
-		FileTag: "mapstructure",
+		FileTag:  "mapstructure",
+		FlagTag:  "cli",
+		ShortTag: "alias",
+		EnvTag:   "envvar",
+		DescTag:  "help",
 	},
 	FlagNames: structconfig.OptionFlagNames{
-		Debug: "config-debug",
+		ConfigPath:    "conf",
+		ConfigType:    "type",
+		DefaultConfig: "show-defaults",
+		Version:       "ver",
+		Debug:         "cfg-debug",
+	},
+	FlagShorts: structconfig.OptionFlagShorts{
+		ConfigPath:    "C",
+		ConfigType:    "T",
+		DefaultConfig: "D",
+		Version:       "v",
+		Debug:         "g",
 	},
 })
 
 err := config.Process("myapp", &cfg)
 ```
 
+`Options.Tags` lets you rename the struct tags used by `structconfig`:
+
+| Field | Default Tag | Controls |
+| --- | --- | --- |
+| `FileTag` | `file` | Config-file key tag and mapstructure tag used during decode. |
+| `FlagTag` | `flag` | CLI flag name override tag. |
+| `ShortTag` | `short` | CLI shorthand alias tag. |
+| `EnvTag` | `env` | Environment variable override tag. |
+| `DescTag` | `desc` | Extra help-text/description tag appended to flag usage. |
+
+`Options.FlagNames` lets you customize the long names of built-in flags:
+
+| Field | Default | Controls |
+| --- | --- | --- |
+| `ConfigPath` | `config` | `--config` flag name. |
+| `ConfigType` | `config-type` | `--config-type` flag name. |
+| `DefaultConfig` | `default-config` | `--default-config` flag name. |
+| `Version` | `version` | `--version` flag name. |
+| `Debug` | `debug` | Debug flag name (used for config output). |
+
+`Options.FlagShorts` lets you customize the short aliases for built-in flags:
+
+| Field | Default | Controls |
+| --- | --- | --- |
+| `ConfigPath` | `c` | `-c` shorthand. |
+| `ConfigType` | `t` | `-t` shorthand. |
+| `DefaultConfig` | `p` | `-p` shorthand. |
+| `Version` | `V` | `-V` shorthand. |
+| `Debug` | `d` | `-d` shorthand. |
+
 ## Struct Tags
 
-`structconfig` reads these tags:
+`structconfig` reads these tags (names are configurable via `Options.Tags` for `file`, `flag`, `short`, `env`, and `desc`):
 
 | Tag | Meaning |
 | --- | --- |
@@ -180,12 +225,12 @@ myapp --config ./config.yaml --config-type yaml
 Every `Process` call registers these built-in flags in addition to the flags derived from your struct:
 
 | Flag | Meaning |
-| --- | --- |
-| `--config`, `-c` | Path to a config file. |
-| `--config-type`, `-t` | Config file format, `toml` or `yaml`. |
-| `--default-config`, `-p` | Print a config file containing defaults and zero values, then exit. |
-| `--version`, `-V` | Print the string from `VersionFunc`, then exit. |
-| `--debug`, `-d` | Print config debug info and exit. The long flag name is customizable through `Options.FlagNames.Debug`. |
+| --- | --- | 
+| `--config`, `-c` | Path to a config file. Both long and short names are customizable via `Options.FlagNames.ConfigPath` and `Options.FlagShorts.ConfigPath`. |
+| `--config-type`, `-t` | Config file format, `toml` or `yaml`. Both long and short names are customizable via `Options.FlagNames.ConfigType` and `Options.FlagShorts.ConfigType`. |
+| `--default-config`, `-p` | Print a config file containing defaults and zero values, then exit. Both long and short names are customizable via `Options.FlagNames.DefaultConfig` and `Options.FlagShorts.DefaultConfig`. |
+| `--version`, `-V` | Print the string from `VersionFunc`, then exit. Both long and short names are customizable via `Options.FlagNames.Version` and `Options.FlagShorts.Version`. |
+| `--debug`, `-d` | Print config debug info and exit. Both long and short names are customizable via `Options.FlagNames.Debug` and `Options.FlagShorts.Debug`. |
 
 ## Supported Field Types
 
