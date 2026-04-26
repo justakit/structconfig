@@ -725,3 +725,29 @@ func TestDefaultConfigFlag(t *testing.T) {
 		t.Errorf("expected config output to contain %q, got %q", "localhost", out)
 	}
 }
+
+func TestDebugFlag(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("HOST", "merged-host")
+
+	os.Args = []string{"app", "--config-debug"}
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
+	})
+	type spec struct {
+		Host string `default:"localhost"`
+	}
+	var s spec
+	out, err := cfg.Process("", &s)
+	if !errors.Is(err, structconfig.ErrDebugCalled) {
+		t.Fatalf("expected ErrDebugCalled, got %v", err)
+	}
+	if out == "" {
+		t.Error("expected non-empty config output")
+	}
+	if !strings.Contains(out, "merged-host") {
+		t.Errorf("expected config output to contain merged value %q, got %q", "merged-host", out)
+	}
+}

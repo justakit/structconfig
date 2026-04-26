@@ -138,8 +138,7 @@ out, err := config.Process("myapp", &cfg)
 
 - normal success: `"", nil`
 - `--version`: version text and `ErrVersionCalled`
-- `--default-config`: encoded config text and `ErrDefaultConfigCalled`
-
+- `--default-config`: encoded config text and `ErrDefaultConfigCalled`- `--debug`: encoded merged config text (all sources applied) and `ErrDebugCalled`
 This package does not call `os.Exit`; callers decide whether to print output and exit.
 
 `Options.Tags` lets you rename the struct tags used by `structconfig`:
@@ -238,7 +237,7 @@ Every `Process` call registers these built-in flags in addition to the flags der
 | `--config-type`, `-t` | Config file format, `toml` or `yaml`. Both long and short names are customizable via `Options.FlagNames.ConfigType` and `Options.FlagShorts.ConfigType`. |
 | `--default-config`, `-p` | Returns a config string containing defaults and zero values through `Process` output with `ErrDefaultConfigCalled`. Both long and short names are customizable via `Options.FlagNames.DefaultConfig` and `Options.FlagShorts.DefaultConfig`. |
 | `--version`, `-V` | Returns the string from `VersionFunc` through `Process` output with `ErrVersionCalled`. Both long and short names are customizable via `Options.FlagNames.Version` and `Options.FlagShorts.Version`. |
-| `--debug`, `-d` | Print config debug info and exit. Both long and short names are customizable via `Options.FlagNames.Debug` and `Options.FlagShorts.Debug`. |
+| `--debug`, `-d` | Returns the fully merged config (defaults → file → env → flags) as an encoded string through `Process` output with `ErrDebugCalled`. Both long and short names are customizable via `Options.FlagNames.Debug` and `Options.FlagShorts.Debug`. |
 
 ## Supported Field Types
 

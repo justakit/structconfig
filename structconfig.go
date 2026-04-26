@@ -20,10 +20,12 @@ import (
 // ErrInvalidSpecification indicates that a specification is of the wrong type.
 // ErrVersionCalled will be returned by Process when the --version flag is set.
 // ErrDefaultConfigCalled will be returned by Process when the --default-config flag is set.
+// ErrDebugCalled will be returned by Process when the --debug flag is set.
 var (
 	ErrInvalidSpecification = errors.New("specification must be a struct pointer")
 	ErrVersionCalled        = errors.New("version flag was set")
 	ErrDefaultConfigCalled  = errors.New("default-config flag was set")
+	ErrDebugCalled          = errors.New("debug flag was set")
 )
 
 var gatherRegexp = regexp.MustCompile("([A-Z]+[a-z]*|[a-z]+|[0-9]+)")
@@ -373,6 +375,11 @@ func (s *StructConfig) Process(prefix string, spec any) (string, error) {
 
 	merged := s.buildMerged()
 
+	debugOut, err := s.processDebugFlag(merged)
+	if err != nil {
+		return debugOut, err
+	}
+
 	if err = s.checkRequired(merged); err != nil {
 		return "", err
 	}
@@ -637,6 +644,21 @@ func (s *StructConfig) processDefaultConfigFlag() (string, error) {
 		return "", err
 	}
 	return out, ErrDefaultConfigCalled
+}
+
+func (s *StructConfig) processDebugFlag(merged map[string]any) (string, error) {
+	printDebug, err := s.flags.GetBool(s.options.FlagNames.Debug)
+	if err != nil {
+		return "", err
+	}
+	if !printDebug {
+		return "", nil
+	}
+	out, err := s.dumpConfig(expandKeys(merged))
+	if err != nil {
+		return "", err
+	}
+	return out, ErrDebugCalled
 }
 
 func (s *StructConfig) dumpConfig(config map[string]any) (string, error) {
