@@ -28,8 +28,10 @@ var (
 	ErrDebugCalled          = errors.New("debug flag was set")
 )
 
-var gatherRegexp = regexp.MustCompile("([A-Z]+[a-z]*|[a-z]+|[0-9]+)")
-var acronymRegexp = regexp.MustCompile("([A-Z]+)([A-Z][^A-Z]+)")
+var (
+	gatherRegexp  = regexp.MustCompile("([A-Z]+[a-z]*|[a-z]+|[0-9]+)")
+	acronymRegexp = regexp.MustCompile("([A-Z]+)([A-Z][^A-Z]+)")
+)
 
 const (
 	skipTagValue         = "-"
@@ -86,19 +88,22 @@ type varInfo struct {
 	Required    bool
 }
 
+// VersionFunc returns the version string used by the built-in version flag.
 type VersionFunc func() string
 
 var defaultVersionFunc VersionFunc = func() string {
 	return fmt.Sprintf("Go version: %s", runtime.Version())
 }
 
+// StructConfig manages startup-time configuration loading for one Process call.
 type StructConfig struct {
 	flags    *pflag.FlagSet
 	options  *Options
-	infos    []varInfo
 	fileData map[string]any
+	infos    []varInfo
 }
 
+// Options configures StructConfig behavior.
 type Options struct {
 	VersionFunc VersionFunc
 	ConfigType  string
@@ -107,6 +112,7 @@ type Options struct {
 	FlagShorts  OptionFlagShorts
 }
 
+// OptionTags defines struct tag names used for config keys, env vars, and flags.
 type OptionTags struct {
 	FileTag  string
 	FlagTag  string
@@ -115,6 +121,7 @@ type OptionTags struct {
 	DescTag  string
 }
 
+// OptionFlagNames customizes built-in long flag names.
 type OptionFlagNames struct {
 	ConfigPath    string
 	ConfigType    string
@@ -123,6 +130,7 @@ type OptionFlagNames struct {
 	Debug         string
 }
 
+// OptionFlagShorts customizes built-in short flag aliases.
 type OptionFlagShorts struct {
 	ConfigPath    string
 	ConfigType    string
@@ -225,6 +233,7 @@ func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo
 	infos := make([]varInfo, 0, specValue.NumField())
 	for i := range specValue.NumField() {
 		f := specValue.Field(i)
+
 		ftype := typeOfSpec.Field(i)
 		if !f.CanSet() || isTrue(ftype.Tag.Get(tagIgnored)) {
 			continue
@@ -235,8 +244,10 @@ func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo
 				if f.Type().Elem().Kind() != reflect.Struct {
 					break
 				}
+
 				f.Set(reflect.New(f.Type().Elem()))
 			}
+
 			f = f.Elem()
 		}
 
@@ -260,11 +271,13 @@ func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo
 		if info.File != "" {
 			info.Name = info.File
 		}
+
 		info.Key = info.Name
 
 		if prefix != "" {
 			info.Key = prefix + "." + info.Key
 		}
+
 		info.Key = strings.ToLower(info.Key)
 
 		if info.Env == "" {
@@ -286,21 +299,25 @@ func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo
 		if f.Kind() == reflect.Struct {
 			innerPrefix := prefix
 			innerEnvPrefix := envPrefix
+
 			if !ftype.Anonymous {
 				innerPrefix = info.Key
 				innerEnvPrefix = info.Env
 			}
 
 			embeddedPtr := f.Addr().Interface()
+
 			embeddedInfos, err := s.gatherInfo(innerPrefix, innerEnvPrefix, embeddedPtr)
 			if err != nil {
 				return nil, err
 			}
+
 			infos = append(infos[:len(infos)-1], embeddedInfos...)
 
 			continue
 		}
 	}
+
 	return infos, nil
 }
 
@@ -312,6 +329,7 @@ func splitWords(key string, split bool) string {
 	words := gatherRegexp.FindAllStringSubmatch(key, -1)
 	if len(words) > 0 {
 		var name []string
+
 		for _, words := range words {
 			if m := acronymRegexp.FindStringSubmatch(words[0]); len(m) == 3 {
 				name = append(name, m[1], m[2])
@@ -326,8 +344,10 @@ func splitWords(key string, split bool) string {
 	return key
 }
 
+// NewStructConfig creates a StructConfig with the provided options.
+//
+// StructConfig is intended to be used once during application startup.
 func NewStructConfig(o *Options) *StructConfig {
-	// StructConfig is designed to be used once during app startup.
 	return &StructConfig{
 		flags:   pflag.NewFlagSet("flag set", pflag.ContinueOnError),
 		options: o.fillDefaults(),
@@ -350,28 +370,34 @@ func (s *StructConfig) Process(prefix string, spec any) (string, error) {
 		if errors.Is(err, ErrInvalidSpecification) {
 			return "", ErrInvalidSpecification
 		}
+
 		return "", fmt.Errorf("gather info: %w", err)
 	}
 
 	for i := range s.infos {
-		if err = s.addFlag(&s.infos[i]); err != nil {
+		err = s.addFlag(&s.infos[i])
+		if err != nil {
 			return "", fmt.Errorf("add flag: %w", err)
 		}
 	}
 
-	if err = s.addBuiltInFlags(); err != nil {
+	err = s.addBuiltInFlags()
+	if err != nil {
 		return "", fmt.Errorf("add built-in flags: %w", err)
 	}
 
-	if err = s.flags.Parse(os.Args[1:]); err != nil {
+	err = s.flags.Parse(os.Args[1:])
+	if err != nil {
 		return "", fmt.Errorf("parse flags: %w", err)
 	}
 
-	if versionOut, err := s.processVersionFlag(); err != nil {
+	versionOut, err := s.processVersionFlag()
+	if err != nil {
 		return versionOut, err
 	}
 
-	if configOut, err := s.processDefaultConfigFlag(); err != nil {
+	configOut, err := s.processDefaultConfigFlag()
+	if err != nil {
 		return configOut, err
 	}
 
@@ -384,7 +410,8 @@ func (s *StructConfig) Process(prefix string, spec any) (string, error) {
 		s.options.ConfigType = configType
 	}
 
-	if err = s.readConfigFile(configPath); err != nil {
+	err = s.readConfigFile(configPath)
+	if err != nil {
 		return "", fmt.Errorf("read config file: %w", err)
 	}
 
@@ -428,6 +455,7 @@ func (s *StructConfig) buildMerged() (map[string]any, error) {
 		if info.Env == skipTagValue || info.Env == "" {
 			continue
 		}
+
 		if val, ok := os.LookupEnv(info.Env); ok {
 			m[info.Key] = val
 		}
@@ -437,6 +465,7 @@ func (s *StructConfig) buildMerged() (map[string]any, error) {
 		if info.Flag == skipTagValue || info.Flag == "" {
 			continue
 		}
+
 		f := s.flags.Lookup(info.Flag)
 		if f == nil || !f.Changed {
 			continue
@@ -477,6 +506,7 @@ func readFlagValue(flags *pflag.FlagSet, info varInfo) (any, error) {
 		if typ.PkgPath() == "time" && typ.Name() == "Duration" {
 			return flags.GetDuration(info.Flag)
 		}
+
 		return flags.GetInt64(info.Flag)
 	case reflect.Uint:
 		return flags.GetUint(info.Flag)
@@ -518,12 +548,13 @@ func (s *StructConfig) unmarshalInto(m map[string]any, target any) error {
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			mapstructure.StringToTimeDurationHookFunc(),
 			stringToTypedSliceHookFunc(","),
-			StringToMapStringHookFunc("=", ","),
+			stringToMapStringHookFunc("=", ","),
 		),
 	})
 	if err != nil {
 		return err
 	}
+
 	return decoder.Decode(expandKeys(m))
 }
 
@@ -532,16 +563,20 @@ func initNilMaps(v reflect.Value) {
 		if v.IsNil() {
 			return
 		}
+
 		v = v.Elem()
 	}
+
 	if v.Kind() != reflect.Struct {
 		return
 	}
+
 	for i := range v.NumField() {
 		f := v.Field(i)
 		if !f.CanSet() {
 			continue
 		}
+
 		switch f.Kind() {
 		case reflect.Map:
 			if f.IsNil() {
@@ -563,6 +598,7 @@ func (s *StructConfig) checkRequired(merged map[string]any) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -573,9 +609,11 @@ func MustProcess(prefix string, spec any) {
 		if out != "" {
 			fmt.Print(out)
 		}
+
 		if errors.Is(err, ErrVersionCalled) || errors.Is(err, ErrDefaultConfigCalled) || errors.Is(err, ErrDebugCalled) {
 			os.Exit(0)
 		}
+
 		panic(err)
 	}
 }
@@ -587,26 +625,36 @@ func (s *StructConfig) MustProcess(prefix string, spec any) {
 		if out != "" {
 			fmt.Print(out)
 		}
+
 		if errors.Is(err, ErrVersionCalled) || errors.Is(err, ErrDefaultConfigCalled) || errors.Is(err, ErrDebugCalled) {
 			os.Exit(0)
 		}
+
 		panic(err)
 	}
 }
 
 func (s *StructConfig) addBuiltInFlags() error {
-	if err := s.addBuiltInStringFlag(s.options.FlagNames.ConfigPath, s.options.FlagShorts.ConfigPath, "", "explicit path to application config"); err != nil {
+	err := s.addBuiltInStringFlag(s.options.FlagNames.ConfigPath, s.options.FlagShorts.ConfigPath, "", "explicit path to application config")
+	if err != nil {
 		return err
 	}
-	if err := s.addBuiltInStringFlag(s.options.FlagNames.ConfigType, s.options.FlagShorts.ConfigType, s.options.ConfigType, "config file type"); err != nil {
+
+	err = s.addBuiltInStringFlag(s.options.FlagNames.ConfigType, s.options.FlagShorts.ConfigType, s.options.ConfigType, "config file type")
+	if err != nil {
 		return err
 	}
-	if err := s.addBuiltInBoolFlag(s.options.FlagNames.DefaultConfig, s.options.FlagShorts.DefaultConfig, "print default config to stdout and exit"); err != nil {
+
+	err = s.addBuiltInBoolFlag(s.options.FlagNames.DefaultConfig, s.options.FlagShorts.DefaultConfig, "print default config to stdout and exit")
+	if err != nil {
 		return err
 	}
-	if err := s.addBuiltInBoolFlag(s.options.FlagNames.Debug, s.options.FlagShorts.Debug, "print config debug info and exit"); err != nil {
+
+	err = s.addBuiltInBoolFlag(s.options.FlagNames.Debug, s.options.FlagShorts.Debug, "print config debug info and exit")
+	if err != nil {
 		return err
 	}
+
 	return s.addBuiltInBoolFlag(s.options.FlagNames.Version, s.options.FlagShorts.Version, "print application version info and exit")
 }
 
@@ -614,13 +662,17 @@ func (s *StructConfig) addBuiltInBoolFlag(name, short, desc string) error {
 	if name == "" || name == skipBuiltInFlagValue {
 		return nil
 	}
+
 	if s.flags.Lookup(name) != nil {
 		return fmt.Errorf("built-in flag %q conflicts with a field flag", name)
 	}
+
 	if short != "" && s.flags.ShorthandLookup(short) != nil {
 		return fmt.Errorf("built-in flag %q short %q conflicts with a field flag", name, short)
 	}
+
 	s.flags.BoolP(name, short, false, desc)
+
 	return nil
 }
 
@@ -628,13 +680,17 @@ func (s *StructConfig) addBuiltInStringFlag(name, short, defVal, desc string) er
 	if name == "" || name == skipBuiltInFlagValue {
 		return nil
 	}
+
 	if s.flags.Lookup(name) != nil {
 		return fmt.Errorf("built-in flag %q conflicts with a field flag", name)
 	}
+
 	if short != "" && s.flags.ShorthandLookup(short) != nil {
 		return fmt.Errorf("built-in flag %q short %q conflicts with a field flag", name, short)
 	}
+
 	s.flags.StringP(name, short, defVal, desc)
+
 	return nil
 }
 
@@ -647,13 +703,16 @@ func (s *StructConfig) processVersionFlag() (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	if showVersion {
 		v := s.options.VersionFunc()
 		if !strings.HasSuffix(v, "\n") {
 			v += "\n"
 		}
+
 		return v, ErrVersionCalled
 	}
+
 	return "", nil
 }
 
@@ -666,10 +725,13 @@ func (s *StructConfig) processDefaultConfigFlag() (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	if !printConfig {
 		return "", nil
 	}
+
 	defaults := make(map[string]any, len(s.infos))
+
 	for _, info := range s.infos {
 		if info.Default != "" {
 			defaults[info.Key] = info.Default
@@ -677,10 +739,12 @@ func (s *StructConfig) processDefaultConfigFlag() (string, error) {
 			defaults[info.Key] = reflect.Zero(info.typ).Interface()
 		}
 	}
+
 	out, err := s.dumpConfig(expandKeys(defaults))
 	if err != nil {
 		return "", err
 	}
+
 	return out, ErrDefaultConfigCalled
 }
 
@@ -689,6 +753,7 @@ func (s *StructConfig) processDefaultConfigFlag() (string, error) {
 func (s *StructConfig) buildSourceAttribution() []keySource {
 	fileFlat := flattenMap("", s.fileData)
 	result := make([]keySource, 0, len(s.infos))
+
 	for _, info := range s.infos {
 		ks := keySource{Key: info.Key, Value: "<unset>", Source: sourceUnset}
 
@@ -719,6 +784,7 @@ func (s *StructConfig) buildSourceAttribution() []keySource {
 
 		result = append(result, ks)
 	}
+
 	return result
 }
 
@@ -729,31 +795,39 @@ func formatSourceTable(sources []keySource) string {
 		hValue  = "VALUE"
 		hSource = "SOURCE"
 	)
+
 	wKey, wValue, wSource := len(hKey), len(hValue), len(hSource)
+
 	for _, ks := range sources {
 		if l := len(ks.Key); l > wKey {
 			wKey = l
 		}
+
 		if l := len(ks.Value); l > wValue {
 			wValue = l
 		}
+
 		if l := len(ks.Source); l > wSource {
 			wSource = l
 		}
 	}
 
 	var b strings.Builder
+
 	rowFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds\n", wKey, wValue, wSource)
 	sepFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds\n", wKey, wValue, wSource)
+
 	fmt.Fprintf(&b, rowFmt, hKey, hValue, hSource)
 	fmt.Fprintf(&b, sepFmt,
 		strings.Repeat("-", wKey),
 		strings.Repeat("-", wValue),
 		strings.Repeat("-", wSource),
 	)
+
 	for _, ks := range sources {
 		fmt.Fprintf(&b, rowFmt, ks.Key, ks.Value, ks.Source)
 	}
+
 	return b.String()
 }
 
@@ -766,19 +840,24 @@ func (s *StructConfig) processDebugFlag(merged map[string]any) (string, error) {
 	if err != nil {
 		return "", err
 	}
+
 	if !printDebug {
 		return "", nil
 	}
+
 	configOut, err := s.dumpConfig(expandKeys(merged))
 	if err != nil {
 		return "", err
 	}
+
 	table := formatSourceTable(s.buildSourceAttribution())
+
 	return configOut + "\n" + table, ErrDebugCalled
 }
 
 func (s *StructConfig) dumpConfig(config map[string]any) (string, error) {
 	var buf strings.Builder
+
 	switch s.options.ConfigType {
 	case "toml":
 		if err := toml.NewEncoder(&buf).Encode(config); err != nil {
@@ -791,6 +870,7 @@ func (s *StructConfig) dumpConfig(config map[string]any) (string, error) {
 	default:
 		return "", fmt.Errorf("unsupported config type %s", s.options.ConfigType)
 	}
+
 	return buf.String(), nil
 }
 
@@ -812,6 +892,7 @@ func (s *StructConfig) getConfigPathAndType() (string, string, error) {
 	if err != nil {
 		return "", "", err
 	}
+
 	return path, configType, nil
 }
 
@@ -826,6 +907,7 @@ func (s *StructConfig) readConfigFile(path string) error {
 	}
 
 	var raw map[string]any
+
 	switch s.options.ConfigType {
 	case "toml":
 		if err = toml.Unmarshal(data, &raw); err != nil {
@@ -840,32 +922,38 @@ func (s *StructConfig) readConfigFile(path string) error {
 	}
 
 	s.fileData = raw
+
 	return nil
 }
 
 // flattenMap converts a nested map into a flat dot-keyed map with lowercase keys.
 func flattenMap(prefix string, m map[string]any) map[string]any {
 	out := make(map[string]any)
+
 	for k, v := range m {
 		key := strings.ToLower(k)
 		if prefix != "" {
 			key = prefix + "." + key
 		}
+
 		if nested, ok := v.(map[string]any); ok {
 			maps.Copy(out, flattenMap(key, nested))
 		} else {
 			out[key] = v
 		}
 	}
+
 	return out
 }
 
 // expandKeys converts a flat dot-keyed map into a nested map for mapstructure.
 func expandKeys(flat map[string]any) map[string]any {
 	out := map[string]any{}
+
 	for k, v := range flat {
 		parts := strings.Split(k, ".")
 		cur := out
+
 		for i, p := range parts {
 			if i == len(parts)-1 {
 				cur[p] = v
@@ -873,10 +961,12 @@ func expandKeys(flat map[string]any) map[string]any {
 				if _, exists := cur[p]; !exists {
 					cur[p] = map[string]any{}
 				}
+
 				cur = cur[p].(map[string]any)
 			}
 		}
 	}
+
 	return out
 }
 
@@ -946,6 +1036,7 @@ func (s *StructConfig) addFlag(v *varInfo) error {
 		if typ.Key().Kind() != reflect.String {
 			return fmt.Errorf("unsupported key type for maps %s for flag %s(%s)", typ, v.Name, v.Flag)
 		}
+
 		switch typ.Elem().Kind() {
 		case reflect.String:
 			s.flags.StringToStringP(v.Flag, v.ShortFlag, map[string]string{}, descr)
@@ -972,6 +1063,7 @@ func isTrue2(s string) (bool, error) {
 	if s == "" {
 		return false, nil
 	}
+
 	return strconv.ParseBool(s)
 }
 
@@ -982,23 +1074,30 @@ func stringToTypedSliceHookFunc(sep string) mapstructure.DecodeHookFunc {
 		if f.Kind() != reflect.String || t.Kind() != reflect.Slice {
 			return data, nil
 		}
+
 		raw := data.(string)
 		if raw == "" {
 			return []string{}, nil
 		}
+
 		return strings.Split(raw, sep), nil
 	}
 }
 
-func StringToMapStringHookFunc(kvSep, sep string) mapstructure.DecodeHookFunc {
+// stringToMapStringHookFunc converts a delimited key/value string into a
+// map[string]T value for mapstructure decode targets.
+func stringToMapStringHookFunc(kvSep, sep string) mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if t.Kind() != reflect.Map || f.Kind() != reflect.String {
 			return data, nil
 		}
+
 		if t.Key().Kind() != reflect.String {
 			return data, nil
 		}
+
 		raw, _ := data.(string)
+
 		switch t.Elem().Kind() {
 		case reflect.String:
 			return parseDefaultMap(raw, kvSep, sep, func(s string) (string, error) { return s, nil })
@@ -1018,18 +1117,23 @@ func parseDefaultMap[V any](val, kvSep, sep string, convert func(string) (V, err
 	if val == "" {
 		return map[string]V{}, nil
 	}
+
 	ss := strings.Split(val, sep)
 	out := make(map[string]V, len(ss))
+
 	for _, pair := range ss {
 		kv := strings.SplitN(pair, kvSep, 2)
 		if len(kv) != 2 {
 			return nil, fmt.Errorf("%s must be formatted as key%svalue", pair, kvSep)
 		}
+
 		v, err := convert(kv[1])
 		if err != nil {
 			return nil, err
 		}
+
 		out[kv[0]] = v
 	}
+
 	return out, nil
 }
