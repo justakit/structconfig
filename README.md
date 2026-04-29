@@ -294,5 +294,8 @@ CLI flag registration is narrower than file and env decoding for maps: only `map
 ## Notes
 
 - The package expects a pointer to a struct. Passing anything else returns `ErrInvalidSpecification`.
-- `MustProcess` prints any non-empty output returned by `Process`, then panics on error.
+- `StructConfig` is intended to be initialized and processed once during app startup.
+- `MustProcess` prints any non-empty output returned by `Process`.
+- `MustProcess` exits with code 0 when `--version`, `--default-config`, or `--debug` is triggered.
+- `MustProcess` panics on all other errors.
 

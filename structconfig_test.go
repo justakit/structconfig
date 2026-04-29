@@ -3,6 +3,7 @@ package structconfig_test
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -418,6 +419,75 @@ func TestMustProcess(t *testing.T) {
 	}()
 	m := make(map[string]string)
 	config.MustProcess("env_config", &m)
+}
+
+func TestMustProcessSpecialFlagsExitZero(t *testing.T) {
+	tests := []struct {
+		name         string
+		mode         string
+		wantContains string
+	}{
+		{name: "version", mode: "version", wantContains: "v-test\n"},
+		{name: "default", mode: "default", wantContains: "localhost"},
+		{name: "debug", mode: "debug", wantContains: "SOURCE"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := exec.Command(os.Args[0], "-test.run=TestMustProcessSpecialFlagsExitZeroHelper")
+			cmd.Env = append(
+				os.Environ(),
+				"GO_WANT_MUSTPROCESS_HELPER=1",
+				"GO_WANT_MUSTPROCESS_MODE="+tt.mode,
+			)
+
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				t.Fatalf("helper process failed: %v\noutput:\n%s", err, out)
+			}
+
+			if !strings.Contains(string(out), tt.wantContains) {
+				t.Fatalf("expected output to contain %q, got:\n%s", tt.wantContains, out)
+			}
+		})
+	}
+}
+
+func TestMustProcessSpecialFlagsExitZeroHelper(t *testing.T) {
+	if os.Getenv("GO_WANT_MUSTPROCESS_HELPER") != "1" {
+		return
+	}
+
+	mode := os.Getenv("GO_WANT_MUSTPROCESS_MODE")
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	type spec struct {
+		Host string `default:"localhost"`
+	}
+
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
+		VersionFunc: func() string {
+			return "v-test"
+		},
+	})
+
+	switch mode {
+	case "version":
+		os.Args = []string{"helper", "--version"}
+	case "default":
+		os.Args = []string{"helper", "--default-config"}
+	case "debug":
+		os.Args = []string{"helper", "--config-debug"}
+	default:
+		t.Fatalf("unknown helper mode %q", mode)
+	}
+
+	var s spec
+	cfg.MustProcess("", &s)
+
+	t.Fatal("MustProcess returned without exiting")
 }
 
 func TestEmbeddedStruct(t *testing.T) {

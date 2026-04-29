@@ -327,6 +327,7 @@ func splitWords(key string, split bool) string {
 }
 
 func NewStructConfig(o *Options) *StructConfig {
+	// StructConfig is designed to be used once during app startup.
 	return &StructConfig{
 		flags:   pflag.NewFlagSet("flag set", pflag.ContinueOnError),
 		options: o.fillDefaults(),
@@ -565,21 +566,29 @@ func (s *StructConfig) checkRequired(merged map[string]any) error {
 	return nil
 }
 
-// MustProcess is the same as Process but prints any output string to stdout and panics if an error occurs.
-func MustProcess(prefix string, spec interface{}) {
+// MustProcess is the same as Process but exits 0 for built-in control-flow
+// flags (version/default-config/debug) and panics for all other errors.
+func MustProcess(prefix string, spec any) {
 	if out, err := Process(prefix, spec); err != nil {
 		if out != "" {
 			fmt.Print(out)
+		}
+		if errors.Is(err, ErrVersionCalled) || errors.Is(err, ErrDefaultConfigCalled) || errors.Is(err, ErrDebugCalled) {
+			os.Exit(0)
 		}
 		panic(err)
 	}
 }
 
-// MustProcess is the same as Process but prints any output string to stdout and panics if an error occurs.
-func (s *StructConfig) MustProcess(prefix string, spec interface{}) {
+// MustProcess is the same as Process but exits 0 for built-in control-flow
+// flags (version/default-config/debug) and panics for all other errors.
+func (s *StructConfig) MustProcess(prefix string, spec any) {
 	if out, err := s.Process(prefix, spec); err != nil {
 		if out != "" {
 			fmt.Print(out)
+		}
+		if errors.Is(err, ErrVersionCalled) || errors.Is(err, ErrDefaultConfigCalled) || errors.Is(err, ErrDebugCalled) {
+			os.Exit(0)
 		}
 		panic(err)
 	}
