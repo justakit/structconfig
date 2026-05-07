@@ -29,6 +29,11 @@ var (
 )
 
 var (
+	decoderType = reflect.TypeFor[Decoder]()
+	setterType  = reflect.TypeFor[Setter]()
+)
+
+var (
 	gatherRegexp  = regexp.MustCompile("([A-Z]+[a-z]*|[a-z]+|[0-9]+)")
 	acronymRegexp = regexp.MustCompile("([A-Z]+)([A-Z][^A-Z]+)")
 )
@@ -296,7 +301,7 @@ func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo
 
 		infos = append(infos, info)
 
-		if f.Kind() == reflect.Struct {
+		if f.Kind() == reflect.Struct && !reflect.PointerTo(f.Type()).Implements(decoderType) && !reflect.PointerTo(f.Type()).Implements(setterType) {
 			innerPrefix := prefix
 			innerEnvPrefix := envPrefix
 
@@ -489,6 +494,18 @@ func readFlagValue(flags *pflag.FlagSet, info varInfo) (any, error) {
 		typ = typ.Elem()
 	}
 
+	typPtr := reflect.PointerTo(typ)
+	if typPtr.Implements(decoderType) || typPtr.Implements(setterType) {
+		return flags.GetString(info.Flag)
+	}
+
+	if typ.Kind() == reflect.Map {
+		elemPtr := reflect.PointerTo(typ.Elem())
+		if elemPtr.Implements(decoderType) || elemPtr.Implements(setterType) {
+			return flags.GetString(info.Flag)
+		}
+	}
+
 	switch typ.Kind() {
 	case reflect.String:
 		return flags.GetString(info.Flag)
@@ -546,6 +563,7 @@ func (s *StructConfig) unmarshalInto(m map[string]any, target any) error {
 		TagName:          s.options.Tags.FileTag,
 		WeaklyTypedInput: true,
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			interfaceDecoderHookFunc(),
 			mapstructure.StringToTimeDurationHookFunc(),
 			stringToTypedSliceHookFunc(","),
 			stringToMapStringHookFunc("=", ","),
@@ -997,6 +1015,11 @@ func (s *StructConfig) addFlag(v *varInfo) error {
 		typ = typ.Elem()
 	}
 
+	if reflect.PointerTo(typ).Implements(decoderType) || reflect.PointerTo(typ).Implements(setterType) {
+		s.flags.StringP(v.Flag, v.ShortFlag, "", descr)
+		return nil
+	}
+
 	switch typ.Kind() {
 	case reflect.String:
 		s.flags.StringP(v.Flag, v.ShortFlag, "", descr)
@@ -1037,6 +1060,12 @@ func (s *StructConfig) addFlag(v *varInfo) error {
 			return fmt.Errorf("unsupported key type for maps %s for flag %s(%s)", typ, v.Name, v.Flag)
 		}
 
+		elemPtr := reflect.PointerTo(typ.Elem())
+		if elemPtr.Implements(decoderType) || elemPtr.Implements(setterType) {
+			s.flags.StringP(v.Flag, v.ShortFlag, "", descr)
+			return nil
+		}
+
 		switch typ.Elem().Kind() {
 		case reflect.String:
 			s.flags.StringToStringP(v.Flag, v.ShortFlag, map[string]string{}, descr)
@@ -1047,6 +1076,7 @@ func (s *StructConfig) addFlag(v *varInfo) error {
 		default:
 			return fmt.Errorf("unsupported element type for maps %s for flag %s(%s)", typ, v.Name, v.Flag)
 		}
+
 	default:
 		return fmt.Errorf("unsupported type %s for flag %s(%s)", typ, v.Name, v.Flag)
 	}
@@ -1065,6 +1095,44 @@ func isTrue2(s string) (bool, error) {
 	}
 
 	return strconv.ParseBool(s)
+}
+
+// interfaceDecoderHookFunc returns a DecodeHookFunc that delegates string-to-T
+// conversion to T when *T implements Decoder or Setter. Decoder takes priority.
+func interfaceDecoderHookFunc() mapstructure.DecodeHookFunc {
+	return func(f, t reflect.Type, data any) (any, error) {
+		if f.Kind() != reflect.String {
+			return data, nil
+		}
+
+		raw := data.(string)
+
+		elem := t
+		if t.Kind() == reflect.Pointer {
+			elem = t.Elem()
+		}
+
+		ptr := reflect.New(elem)
+
+		switch {
+		case ptr.Type().Implements(decoderType):
+			if err := ptr.Interface().(Decoder).Decode(raw); err != nil {
+				return nil, err
+			}
+		case ptr.Type().Implements(setterType):
+			if err := ptr.Interface().(Setter).Set(raw); err != nil {
+				return nil, err
+			}
+		default:
+			return data, nil
+		}
+
+		if t.Kind() == reflect.Pointer {
+			return ptr.Interface(), nil
+		}
+
+		return ptr.Elem().Interface(), nil
+	}
 }
 
 // stringToTypedSliceHookFunc converts a comma-separated string to []string for any
@@ -1097,6 +1165,34 @@ func stringToMapStringHookFunc(kvSep, sep string) mapstructure.DecodeHookFunc {
 		}
 
 		raw, _ := data.(string)
+
+		elemPtr := reflect.PointerTo(t.Elem())
+		if elemPtr.Implements(decoderType) || elemPtr.Implements(setterType) {
+			pairs, err := parseDefaultMap(raw, kvSep, sep, func(s string) (string, error) { return s, nil })
+			if err != nil {
+				return nil, err
+			}
+
+			useDecoder := elemPtr.Implements(decoderType)
+			result := reflect.MakeMap(t)
+
+			for k, v := range pairs {
+				ptr := reflect.New(t.Elem())
+				if useDecoder {
+					if err := ptr.Interface().(Decoder).Decode(v); err != nil {
+						return nil, fmt.Errorf("key %q: %w", k, err)
+					}
+				} else {
+					if err := ptr.Interface().(Setter).Set(v); err != nil {
+						return nil, fmt.Errorf("key %q: %w", k, err)
+					}
+				}
+
+				result.SetMapIndex(reflect.ValueOf(k), ptr.Elem())
+			}
+
+			return result.Interface(), nil
+		}
 
 		switch t.Elem().Kind() {
 		case reflect.String:
@@ -1136,4 +1232,16 @@ func parseDefaultMap[V any](val, kvSep, sep string, convert func(string) (V, err
 	}
 
 	return out, nil
+}
+
+// Decoder has the same semantics as Setter, but takes higher precedence.
+// It is provided for historical compatibility.
+type Decoder interface {
+	Decode(value string) error
+}
+
+// Setter is implemented by types can self-deserialize values.
+// Any type that implements flag.Value also implements Setter.
+type Setter interface {
+	Set(value string) error
 }

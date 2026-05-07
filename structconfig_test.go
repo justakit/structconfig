@@ -2,8 +2,10 @@ package structconfig_test
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -944,6 +946,141 @@ func TestDebugFlagShowsDefault(t *testing.T) {
 	}
 	if !strings.Contains(out, "localhost") {
 		t.Errorf("expected source attribution to show default value %q, got:\n%s", "localhost", out)
+	}
+}
+
+// hexInt is a custom integer type that self-decodes from a hex string via Decoder.
+type hexInt int64
+
+func (h *hexInt) Decode(s string) error {
+	n, err := strconv.ParseInt(strings.TrimPrefix(s, "0x"), 16, 64)
+	if err != nil {
+		return fmt.Errorf("hexInt: %w", err)
+	}
+	*h = hexInt(n)
+	return nil
+}
+
+// csvList is a custom slice type that self-decodes from a semicolon-separated string via Setter.
+type csvList []string
+
+func (c *csvList) Set(s string) error {
+	*c = strings.Split(s, ";")
+	return nil
+}
+
+// bothType implements both Decoder and Setter; Decoder must take priority.
+type bothType struct{ Val string }
+
+func (b *bothType) Decode(s string) error { b.Val = "decoder:" + s; return nil }
+func (b *bothType) Set(s string) error    { b.Val = "setter:" + s; return nil }
+
+func TestDecoderInterfaceFromEnv(t *testing.T) {
+	t.Setenv("APP_VALUE", "0xff")
+
+	type spec struct {
+		Value hexInt `envconfig:"VALUE"`
+	}
+	var s spec
+	cfg := structconfig.NewStructConfig(nil)
+	if _, err := cfg.Process("APP", &s); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.Value != 255 {
+		t.Errorf("expected 255, got %d", s.Value)
+	}
+}
+
+func TestDecoderInterfaceFromDefault(t *testing.T) {
+	type spec struct {
+		Value hexInt `envconfig:"VALUE" default:"0x0a"`
+	}
+	var s spec
+	cfg := structconfig.NewStructConfig(nil)
+	if _, err := cfg.Process("APP", &s); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.Value != 10 {
+		t.Errorf("expected 10, got %d", s.Value)
+	}
+}
+
+func TestDecoderInterfaceFromFlag(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+	os.Args = []string{"app", "--value=0x1f"}
+
+	type spec struct {
+		Value hexInt `envconfig:"VALUE"`
+	}
+	var s spec
+	cfg := structconfig.NewStructConfig(nil)
+	if _, err := cfg.Process("APP", &s); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.Value != 31 {
+		t.Errorf("expected 31, got %d", s.Value)
+	}
+}
+
+func TestSetterInterfaceFromEnv(t *testing.T) {
+	t.Setenv("APP_TAGS", "a;b;c")
+
+	type spec struct {
+		Tags csvList `envconfig:"TAGS"`
+	}
+	var s spec
+	cfg := structconfig.NewStructConfig(nil)
+	if _, err := cfg.Process("APP", &s); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(s.Tags) != 3 || s.Tags[0] != "a" || s.Tags[1] != "b" || s.Tags[2] != "c" {
+		t.Errorf("unexpected tags: %v", s.Tags)
+	}
+}
+
+func TestDecoderTakesPriorityOverSetter(t *testing.T) {
+	t.Setenv("APP_VAL", "hello")
+
+	type spec struct {
+		Val bothType `envconfig:"VAL"`
+	}
+	var s spec
+	cfg := structconfig.NewStructConfig(nil)
+	if _, err := cfg.Process("APP", &s); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.Val.Val != "decoder:hello" {
+		t.Errorf("expected Decoder to take priority, got %q", s.Val.Val)
+	}
+}
+
+func TestDecoderInterfaceError(t *testing.T) {
+	t.Setenv("APP_VALUE", "notHex")
+
+	type spec struct {
+		Value hexInt `envconfig:"VALUE"`
+	}
+	var s spec
+	cfg := structconfig.NewStructConfig(nil)
+	if _, err := cfg.Process("APP", &s); err == nil {
+		t.Fatal("expected error from invalid hex, got nil")
+	}
+}
+
+func TestDecoderMapFromEnv(t *testing.T) {
+	t.Setenv("APP_CODES", "a=0x01,b=0x02")
+
+	type spec struct {
+		Codes map[string]hexInt `envconfig:"CODES"`
+	}
+	var s spec
+	cfg := structconfig.NewStructConfig(nil)
+	if _, err := cfg.Process("APP", &s); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if s.Codes["a"] != 1 || s.Codes["b"] != 2 {
+		t.Errorf("unexpected map values: %v", s.Codes)
 	}
 }
 
