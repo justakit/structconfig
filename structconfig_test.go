@@ -1107,3 +1107,53 @@ func TestDebugFlagShowsUnset(t *testing.T) {
 		t.Errorf("expected source attribution to show %q source, got:\n%s", "unset", out)
 	}
 }
+
+func TestSecretTagRedactsValue(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	t.Setenv("PASSWORD", "supersecret")
+
+	os.Args = []string{"app", "--config-debug"}
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
+	})
+	type spec struct {
+		Password string `secret:"true"`
+	}
+	var s spec
+	out, err := cfg.Process("", &s)
+	if !errors.Is(err, structconfig.ErrDebugCalled) {
+		t.Fatalf("expected ErrDebugCalled, got %v", err)
+	}
+	if strings.Contains(out, "supersecret") {
+		t.Errorf("secret value must not appear in debug output, got:\n%s", out)
+	}
+	if !strings.Contains(out, "[REDACTED]") {
+		t.Errorf("expected redacted value %q in debug output, got:\n%s", "[REDACTED]", out)
+	}
+}
+
+func TestSecretTagUnsetFieldNotRedacted(t *testing.T) {
+	origArgs := os.Args
+	defer func() { os.Args = origArgs }()
+
+	os.Args = []string{"app", "--config-debug"}
+	cfg := structconfig.NewStructConfig(&structconfig.Options{
+		FlagNames: structconfig.OptionFlagNames{Debug: "config-debug"},
+	})
+	type spec struct {
+		Password string `secret:"true"`
+	}
+	var s spec
+	out, err := cfg.Process("", &s)
+	if !errors.Is(err, structconfig.ErrDebugCalled) {
+		t.Fatalf("expected ErrDebugCalled, got %v", err)
+	}
+	if !strings.Contains(out, "<unset>") {
+		t.Errorf("unset secret field should still show %q, got:\n%s", "<unset>", out)
+	}
+	if strings.Contains(out, "[REDACTED]") {
+		t.Errorf("unset secret field must not show %q, got:\n%s", "[REDACTED]", out)
+	}
+}

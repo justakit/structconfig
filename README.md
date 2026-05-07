@@ -193,6 +193,7 @@ FlagNames: structconfig.OptionFlagNames{
 | `file` | Override the config file key for a field. This tag name is configurable through `Options.Tags.FileTag`. |
 | `default` | Default value used when no higher-priority source provides a value. |
 | `required` | Mark the field as required. Missing values return an error. |
+| `secret` | Redact the field value in `--debug` output, replacing it with `[REDACTED]`. |
 | `desc` | Extra description appended to the generated flag help text. |
 | `ignored` | Skip the field entirely. |
 | `split_words` | Split CamelCase field names into `UPPER_SNAKE_CASE` for env lookup. |
@@ -205,7 +206,8 @@ type Config struct {
 	ServiceHost string `env:"SERVICE_HOST"`
 	LogLevel    string `flag:"log-level" file:"log.level"`
 	APIKey      string `required:"true" split_words:"true"`
-	Secret      string `ignored:"true"`
+	Password    string `secret:"true"`
+	Ignored     string `ignored:"true"`
 }
 ```
 
@@ -258,10 +260,13 @@ database.host    db.example  file
 port             9090        flag (--port)
 user             alice       env (MYAPP_USER)
 timeout          30s         default
-secret           <unset>     unset
+password         [REDACTED]  env (MYAPP_PASSWORD)
+ignored          <unset>     unset
 ```
 
 Possible `SOURCE` values are `default`, `file`, `env (ENV_VAR)`, `flag (--flag-name)`, and `unset`.
+
+Fields marked `secret:"true"` always show `[REDACTED]` instead of their actual value in the source attribution table. Fields that have no value from any source still show `<unset>`.
 
 ## Supported Field Types
 

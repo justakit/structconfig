@@ -52,6 +52,7 @@ const (
 	tagDescription = "desc"
 	tagIgnored     = "ignored"
 	tagSplitWords  = "split_words"
+	tagSecret      = "secret"
 
 	flagConfigPath    = "config"
 	flagConfigType    = "config-type"
@@ -91,6 +92,7 @@ type varInfo struct {
 	File        string
 	Description string
 	Required    bool
+	Secret      bool
 }
 
 // VersionFunc returns the version string used by the built-in version flag.
@@ -261,6 +263,11 @@ func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo
 			return nil, fmt.Errorf("bad required tag value for field %s: %w", ftype.Name, err)
 		}
 
+		secret, err := isTrue2(ftype.Tag.Get(tagSecret))
+		if err != nil {
+			return nil, fmt.Errorf("bad secret tag value for field %s: %w", ftype.Name, err)
+		}
+
 		info := varInfo{
 			Name:        ftype.Name,
 			Env:         ftype.Tag.Get(s.options.Tags.EnvTag),
@@ -270,6 +277,7 @@ func (s *StructConfig) gatherInfo(prefix, envPrefix string, spec any) ([]varInfo
 			Default:     ftype.Tag.Get(tagDefault),
 			Description: ftype.Tag.Get(s.options.Tags.DescTag),
 			Required:    required,
+			Secret:      secret,
 			typ:         ftype.Type,
 		}
 
@@ -800,6 +808,10 @@ func (s *StructConfig) buildSourceAttribution() []keySource {
 			}
 		}
 
+		if info.Secret && ks.Source != sourceUnset {
+			ks.Value = "[REDACTED]"
+		}
+
 		result = append(result, ks)
 	}
 
@@ -849,6 +861,18 @@ func formatSourceTable(sources []keySource) string {
 	return b.String()
 }
 
+func (s *StructConfig) redactSecrets(merged map[string]any) map[string]any {
+	out := maps.Clone(merged)
+	for _, info := range s.infos {
+		if info.Secret {
+			if _, ok := out[info.Key]; ok {
+				out[info.Key] = "[REDACTED]"
+			}
+		}
+	}
+	return out
+}
+
 func (s *StructConfig) processDebugFlag(merged map[string]any) (string, error) {
 	if s.options.FlagNames.Debug == skipBuiltInFlagValue {
 		return "", nil
@@ -863,7 +887,7 @@ func (s *StructConfig) processDebugFlag(merged map[string]any) (string, error) {
 		return "", nil
 	}
 
-	configOut, err := s.dumpConfig(expandKeys(merged))
+	configOut, err := s.dumpConfig(expandKeys(s.redactSecrets(merged)))
 	if err != nil {
 		return "", err
 	}
